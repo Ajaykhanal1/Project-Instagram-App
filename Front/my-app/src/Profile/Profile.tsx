@@ -97,7 +97,7 @@ const Profile: React.FC = () => {
     socket.on("bookmarkUpdated", handler);
 
     return () => {
-      socket.off("bookmarkUpdated", handler); // ✅ FIXED
+      socket.off("bookmarkUpdated", handler);
     };
   }, [user]);
   useEffect(() => {
