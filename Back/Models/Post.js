@@ -28,19 +28,6 @@ const postSchema = new mongoose.Schema({
 
 
 
-  // Comments 
-  comment: {
-    type: Number,
-    default: 0,
-  },
-  text: {
-    type: String,
-    trim: true,
-  },
-
-
-
-
 
 
   

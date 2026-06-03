@@ -13,29 +13,18 @@ type MediaFile = {
   type: "image" | "video";
 };
 
-type CropArea = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
 const Post = ({ onClose }: Props) => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const [userId, setUserId] = useState<string>("");
   const [token, setToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState("");
 
   const [media, setMedia] = useState<MediaFile | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [croppedArea, setCroppedArea] = useState<CropArea | null>(null);
 
-  /* ======================
-     GET USER FROM TOKEN
-  ====================== */
+  /* ================= TOKEN ================= */
   useEffect(() => {
     const t = localStorage.getItem("token");
     setToken(t);
@@ -46,25 +35,7 @@ const Post = ({ onClose }: Props) => {
     }
   }, []);
 
-  /* ======================
-     FETCH USER POSTS
-  ====================== */
-  useEffect(() => {
-    if (!userId || !token) return;
-
-    fetch(`http://localhost:5000/api/posts/posts/${userId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.json())
-      .then(setPosts)
-      .catch(console.error);
-  }, [userId, token]);
-
-  /* ======================
-     FILE SELECT
-  ====================== */
+  /* ================= FILE ================= */
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -76,57 +47,53 @@ const Post = ({ onClose }: Props) => {
     });
   };
 
-  /* ======================
-     CROPPER CALLBACK
-  ====================== */
-  const onCropComplete = (_: any, areaPixels: CropArea) => {
-    setCroppedArea(areaPixels);
-  };
-
-  /* ======================
-     UPLOAD POST
-  ====================== */
+  /* ================= UPLOAD ================= */
   const handleUpload = async () => {
-    if (!media || !userId || !token) return;
+    if (!media || !token || !userId) return;
 
     const formData = new FormData();
     formData.append("file", media.file);
     formData.append("userId", userId);
     formData.append("type", media.type);
 
-    const res = await fetch("http://localhost:5000/api/posts/upload", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+    try {
+      const res = await fetch("http://localhost:5000/api/posts/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-    const data = await res.json();
-    console.log("Uploaded:", data);
+      const data = await res.json();
+      console.log("Uploaded:", data);
 
-    setMedia(null);
-    onClose();
+      setMedia(null);
+      onClose();
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
   };
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/80 z-50"
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
       onClick={onClose}
     >
       <div
+        className="w-full max-w-md h-150 bg-[#111] text-white rounded-2xl p-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}
-        className="w-105 h-150 bg-gray-900 text-white rounded-xl p-4"
       >
+
         {/* HEADER */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Create Post</h2>
+          <h2 className="font-semibold text-lg">Create Post</h2>
           <X className="cursor-pointer" onClick={onClose} />
         </div>
 
-        {/* FILE INPUT */}
+        {/* INPUT */}
         <input
-          ref={fileInputRef}
+          ref={fileRef}
           type="file"
           hidden
           accept="image/*,video/*"
@@ -136,20 +103,23 @@ const Post = ({ onClose }: Props) => {
         {/* UPLOAD AREA */}
         {!media && (
           <div
-            onClick={() => fileInputRef.current?.click()}
-            className="h-105 border border-dashed border-gray-600 flex items-center justify-center rounded-lg cursor-pointer hover:bg-gray-800"
+            onClick={() => fileRef.current?.click()}
+            className="flex-1 border border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-[#1a1a1a] transition"
           >
-            <Upload size={40} />
+            <Upload size={45} />
+            <p className="text-sm text-gray-400 mt-2">
+              Click to upload image or video
+            </p>
           </div>
         )}
 
         {/* PREVIEW */}
         {media && (
-          <>
-            {/* FIXED PREVIEW BOX */}
-            <div className="relative w-full h-105 bg-black rounded-lg overflow-hidden">
+          <div className="flex flex-col flex-1">
 
-              {/* IMAGE CROPPER */}
+            {/* MEDIA BOX */}
+            <div className=" relative flex-1 bg-black rounded-xl overflow-hidden">
+
               {media.type === "image" && (
                 <Cropper
                   image={media.url}
@@ -158,31 +128,40 @@ const Post = ({ onClose }: Props) => {
                   aspect={2 / 3}
                   onCropChange={setCrop}
                   onZoomChange={setZoom}
-                  onCropComplete={onCropComplete}
                 />
               )}
 
-              {/* VIDEO PREVIEW */}
               {media.type === "video" && (
                 <video
                   src={media.url}
-                  className="w-full h-full object-cover"
+                  className="w-full h-110 object-cover"
                   controls
                 />
               )}
             </div>
 
-            {/* BUTTONS */}
-            <div className="flex justify-end mt-4">
+            {/* ACTIONS */}
+            <div className="flex justify-between items-center mt-4">
+
+              <button
+                onClick={() => setMedia(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                Change
+              </button>
+
               <button
                 onClick={handleUpload}
-                className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded"
+                className="bg-blue-600 cursor-pointer hover:bg-blue-700 px-5 py-2 rounded-lg"
               >
-                Save
+                Post
               </button>
+
             </div>
-          </>
+
+          </div>
         )}
+
       </div>
     </div>
   );

@@ -1,14 +1,55 @@
 const Post = require("../models/Post");
+const Comment = require("../Models/Comments");
+function buildCommentTree(comments) {
+  const map = {};
+  const roots = [];
+
+  // create map
+  comments.forEach((c) => {
+    map[c._id] = { ...c._doc, replies: [] };
+  });
+
+  // build tree
+  comments.forEach((c) => {
+    const node = map[c._id];
+
+    if (c.parentCommentId) {
+      const parent = map[c.parentCommentId];
+      if (parent) {
+        parent.replies.push(node);
+      }
+    } else {
+      roots.push(node);
+    }
+  });
+
+  return roots;
+}
 
 const setupSocket = (io) => {
   io.on("connection", (socket) => {
-
-
     socket.on("getPosts", async () => {
-      const posts = await Post.find();
-      socket.emit("postsData", posts);
-    });
+      try {
+        const posts = await Post.find();
 
+        const postsWithCommentCount = await Promise.all(
+          posts.map(async (post) => {
+            const commentCount = await Comment.countDocuments({
+              postId: post._id,
+            });
+
+            return {
+              ...post._doc,
+              commentCount,
+            };
+          }),
+        );
+
+        socket.emit("postsData", postsWithCommentCount);
+      } catch (err) {
+        console.log(err);
+      }
+    });
 
     socket.on("toggleLike", async ({ postId, userId }) => {
       const post = await Post.findById(postId);
@@ -29,11 +70,94 @@ const setupSocket = (io) => {
       io.emit("postUpdated", post);
     });
 
-    
+    socket.on("getComment", async ({ postId }) => {
+      try {
+        socket.join(postId);
 
+        const comments = await Comment.find({ postId })
+          .populate("userId", "displayName avatar")
+          .sort({ createdAt: 1 });
 
-    
+        const tree = buildCommentTree(comments);
 
+        socket.emit("commentsData", tree);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    socket.on(
+      "addComment",
+      async ({ postId, userId, text, parentCommentId }) => {
+        if (!text) return;
+
+        try {
+
+          if (parentCommentId) {
+            const parent = await Comment.findById(parentCommentId);
+
+            if (!parent) {
+              return;
+            }
+
+            if (parent.parentCommentId) {
+              socket.emit("commentError", {
+                message: "Cannot reply to a reply",
+              });
+              return;
+            }
+          }
+
+          await Comment.create({
+            postId,
+            userId,
+            text,
+            parentCommentId: parentCommentId || null,
+          });
+
+          const comments = await Comment.find({ postId })
+            .populate("userId", "displayName avatar")
+            .sort({ createdAt: 1 });
+
+          const tree = buildCommentTree(comments);
+
+          io.to(postId).emit("commentsData", tree); // 🔥 ROOM ONLY
+        } catch (err) {
+          console.log(err);
+        }
+      },
+    );
+
+    socket.on("toggleCommentLike", async ({ commentId, userId }) => {
+      try {
+        const comment = await Comment.findById(commentId);
+
+        if (!comment) return;
+
+        const alreadyLiked = comment.likes.includes(userId);
+
+        if (alreadyLiked) {
+          //  UNLIKE
+          comment.likes = comment.likes.filter(
+            (id) => id.toString() !== userId,
+          );
+        } else {
+          //  LIKE
+          comment.likes.push(userId);
+        }
+
+        await comment.save();
+
+        const updatedComment = await Comment.findById(commentId).populate(
+          "userId",
+          "displayName avatar",
+        );
+
+        io.emit("commentUpdated", updatedComment);
+      } catch (err) {
+        console.log(err);
+      }
+    });
   });
 };
 

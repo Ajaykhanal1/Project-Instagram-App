@@ -1,21 +1,163 @@
 import { useEffect, useState } from "react";
 import ReelItem from "./ReelItem";
-import { Heart} from "lucide-react";
+import { X, Heart, MessageCircle } from "lucide-react";
 import { socket } from "../Socket/Socket";
-
 type Post = {
     _id: string;
     mediaUrl: string;
     type: string;
     likesCount: number;
     likes: string[];
+    commentCount: number;
+    text: String;
 };
 
+type Comment = {
+    _id: string;
+    text: string;
+
+    userId: {
+        _id: string;
+        displayName: string;
+        avatar: string;
+    };
+
+    likes: string[];
+
+    replies?: Comment[];
+
+    createdAt: string;
+};
+
+
+const CommentItem = ({
+    comment,
+    user,
+    handleCommentLike,
+    setReplyTo,
+    toggleReplies,
+    expandedReplies,
+    isReply = false
+}: any) => {
+    const isLiked = comment.likes.includes(user?._id);
+
+    return (
+        <div className="flex gap-3 p-2">
+            <img
+                src={comment.userId.avatar}
+                className="w-8 h-8 rounded-full"
+            />
+
+            <div className="flex-1">
+                <div className="flex items-center gap-2">
+                    <p className="text-white font-semibold text-sm">
+                        {comment.userId.displayName}
+                    </p>
+                    <p className="font-light text-sm">{(() => {
+                        const s = (Date.now() - new Date(comment.createdAt).getTime()) / 1000;
+                        return s < 60 ? `${s | 0}s` :
+                            s < 3600 ? `${(s / 60) | 0}m` :
+                                s < 86400 ? `${(s / 3600) | 0}h` :
+                                    s < 604800 ? `${(s / 86400) | 0}d` :
+                                        `${(s / 2592000) | 0}mo`;
+                    })()}</p>
+                </div>
+
+                <p className="text-gray-300 text-sm">{comment.text}</p>
+
+                {/* actions */}
+                <div className="flex gap-3 text-xs text-gray-400 mt-1">
+                    <button
+                        onClick={() => handleCommentLike(comment._id)}
+                        className="flex items-center gap-1"
+                    >
+                        <Heart
+                            size={20}
+                            className={
+                                isLiked
+                                    ? "text-red-500 fill-red-500"
+                                    : "text-white"
+                            }
+                        />
+                        {comment.likes.length}
+                    </button>
+
+                    {!isReply && (
+                        <button onClick={() => setReplyTo(comment._id)}>
+                            Reply
+                        </button>
+                    )}
+                </div>
+
+                {/* RECURSIVE REPLIES */}
+                <div className="ml-6 border-l border-gray-700 pl-3 mt-2">
+                    {(() => {
+                        const replies = comment.replies || [];
+                        const isExpanded = expandedReplies[comment._id];
+
+                        const visibleReplies = isExpanded
+                            ? replies
+                            : replies.slice(0, 1); // show only 2 initially
+
+                        return (
+                            <>
+                                {visibleReplies.map((reply: any) => (
+                                    <CommentItem
+                                        key={reply._id}
+                                        comment={reply}
+                                        user={user}
+                                        handleCommentLike={handleCommentLike}
+                                        setReplyTo={setReplyTo}
+                                        expandedReplies={expandedReplies}
+                                        toggleReplies={toggleReplies}
+                                        isReply={true}
+
+                                    />
+                                ))}
+
+                                {replies.length > 1 && (
+                                    <button
+                                        onClick={() => toggleReplies(comment._id)}
+                                        className="text-blue-400 text-xs mt-2 hover:underline"
+                                    >
+                                        {isExpanded
+                                            ? "Hide replies"
+                                            : `View ${replies.length - 1} more replies`}
+                                    </button>
+                                )}
+                            </>
+                        );
+                    })()}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function Reels() {
 
     const [posts, setPosts] = useState<Post[]>([]);
     const [user, setUser] = useState<any>(null);
+    const [showCommentSection, setShowCommentsSection] = useState(false);
+    const [comment, setComment] = useState<Comment[]>([]);
+
+    const [newComment, setNewComment] = useState("");
+    const [selectedPostId, setSelectedPostId] = useState("");
+    const [replyTo, setReplyTo] = useState<string | null>(null);
+    const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        // only reset when switching post (not every comment update)
+        setExpandedReplies({});
+    }, [selectedPostId]);
+
+
+    const toggleReplies = (commentId: string) => {
+        setExpandedReplies((prev) => ({
+            ...prev,
+            [commentId]: !prev[commentId],
+        }));
+    };
 
     // GET USER
     useEffect(() => {
@@ -44,15 +186,6 @@ export default function Reels() {
         };
     }, []);
 
-    // SOCKET LIKE / UNLIKE
-    const handleLike = (postId: string) => {
-        if (!user?._id) return;
-
-        socket.emit("toggleLike", {
-            postId,
-            userId: user._id
-        });
-    };
 
     // REALTIME UPDATE FROM SERVER
     useEffect(() => {
@@ -93,15 +226,66 @@ export default function Reels() {
     };
 
 
+    useEffect(() => {
+        socket.on("commentsData", (data) => {
+            setComment(data);
+        });
+
+        return () => {
+            socket.off("commentsData");
+        };
+    }, []);
+
+    const handleComment = (postId: string) => {
+        setSelectedPostId(postId);
+        setShowCommentsSection(true);
+
+        socket.emit("getComment", { postId });
+    };
+    // SOCKET LIKE / UNLIKE
+    const handleLike = (postId: string) => {
+        if (!user?._id) return;
+
+        socket.emit("toggleLike", {
+            postId,
+            userId: user._id
+        });
+    };
+
+    const handleCommentLike = (commentId: string) => {
+        if (!user?._id) return;
+
+        socket.emit("toggleCommentLike", {
+            commentId,
+            userId: user._id
+        });
+    };
+
+
+    useEffect(() => {
+        socket.on("commentUpdated", (updatedComment) => {
+
+            setComment(prev =>
+                prev.map(c =>
+                    c._id === updatedComment._id
+                        ? updatedComment
+                        : c
+                )
+            );
+
+        });
+
+        return () => {
+            socket.off("commentUpdated");
+        };
+    }, []);
+
 
     return (
         <div className="w-full h-screen bg-black flex justify-center">
+
+
             <div className="w-full max-w-md h-screen overflow-y-scroll scrollbar-hide snap-y snap-mandatory">
-
-
-
-
-
                 {posts
                     .filter(p => p.type === "video")
                     .map(post => {
@@ -141,22 +325,142 @@ export default function Reels() {
                                     </div>
 
                                     {/* COMMENT */}
-                                    
+                                    <div className="flex flex-col items-center gap-1 text-white">
+
+                                        <button className="cursor-pointer" onClick={() => handleComment(post._id)}>
+                                            <MessageCircle
+                                                size={30}
+                                                className="text-white"
+
+                                            />
+                                        </button>
+
+                                        <span className="text-xs">{formatCount(post.commentCount)}</span>
+
+                                    </div>
+
 
 
                                 </div>
 
+
+
                             </div>
-                        );
+                        )
                     })}
-
-
-
-
-
-
-
             </div>
+
+
+            {showCommentSection && (
+                <div className="fixed inset-0 z-50 flex">
+
+                    {/* Overlay */}
+                    <div
+                        className="absolute inset-0 bg-black/60"
+                        onClick={() => setShowCommentsSection(false)}
+                    />
+
+                    {/* Comment Panel */}
+                    <div className="
+      relative ml-auto
+      w-full sm:w-105
+      h-full
+      bg-[#111]
+      flex flex-col
+      rounded-l-2xl
+      shadow-2xl
+      overflow-hidden
+    ">
+
+                        {/* Header */}
+                        <div className="flex items-center justify-center relative p-4 border-b border-gray-800">
+                            <X
+                                className="absolute left-4 cursor-pointer"
+                                onClick={() => setShowCommentsSection(false)}
+                            />
+                            <h1 className="font-semibold text-white">Comments</h1>
+                        </div>
+
+                        {/* Comments List */}
+                        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 scrollbar-hide">
+
+                            {comment.map((c) => (
+                                <CommentItem
+                                    key={c._id}
+                                    comment={c}
+                                    user={user}
+                                    handleCommentLike={handleCommentLike}
+                                    setReplyTo={setReplyTo}
+                                    expandedReplies={expandedReplies}
+                                    toggleReplies={toggleReplies}
+                                />
+                            ))}
+
+
+
+                        </div>
+
+                        {/* Input Box (Sticky Bottom like Instagram) */}
+                        {replyTo && (
+                            <div className="px-3 py-2 text-xs text-blue-400 border-t border-gray-800 flex justify-between items-center">
+                                <span>Replying to a comment...</span>
+
+                                <button
+                                    onClick={() => setReplyTo(null)}
+                                    className="text-red-400"
+                                >
+                                    cancel
+                                </button>
+                            </div>
+                        )}
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+
+                                if (!newComment.trim()) return;
+
+                                socket.emit("addComment", {
+                                    postId: selectedPostId,
+                                    userId: user._id,
+                                    text: newComment,
+                                    parentCommentId: replyTo || null,
+                                });
+
+                                setNewComment("");
+                                setReplyTo(null);
+                            }}
+                            className="border-t border-gray-800 p-3 flex items-center gap-2"
+                        >
+
+                            <input
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                className="
+                                  flex-1
+                                   bg-gray-900
+                                   text-white
+                                  rounded-full
+                                   px-4 py-2
+                                  outline-none
+                                "
+                                type="text"
+                                placeholder={
+                                    replyTo ? "Write a reply..." : "Add a comment..."
+                                }
+                            />
+
+                            <button
+                                type="submit"
+                                className="text-blue-500 font-semibold disabled:opacity-50"
+                                disabled={!newComment.trim()}
+                            >
+                                Send
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+            )}
 
         </div>
     );
