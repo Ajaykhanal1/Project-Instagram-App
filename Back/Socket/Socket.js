@@ -51,24 +51,29 @@ const setupSocket = (io) => {
       }
     });
 
-    socket.on("toggleLike", async ({ postId, userId }) => {
-      const post = await Post.findById(postId);
+    socket.on("deletePost", async ({ postId, userId }) => {
+  try {
+    const post = await Post.findById(postId);
 
-      const isLiked = post.likes.includes(userId);
+    if (!post) return;
 
-      if (isLiked) {
-        post.likes.pull(userId);
-        post.likesCount--;
-      } else {
-        post.likes.push(userId);
-        post.likesCount++;
-      }
+    // (IMPORTANT) Only owner can delete
+    if (post.userId.toString() !== userId) {
+      return;
+    }
 
-      await post.save();
+    await Post.findByIdAndDelete(postId);
 
-      // send updated post to ALL users
-      io.emit("postUpdated", post);
-    });
+    // also delete related comments (optional but recommended)
+    await Comment.deleteMany({ postId });
+
+    // notify all clients
+    io.emit("postDeleted", { postId });
+
+  } catch (err) {
+    console.log(err);
+  }
+});
 
     socket.on("getComment", async ({ postId }) => {
       try {
@@ -92,7 +97,6 @@ const setupSocket = (io) => {
         if (!text) return;
 
         try {
-
           if (parentCommentId) {
             const parent = await Comment.findById(parentCommentId);
 
@@ -154,6 +158,47 @@ const setupSocket = (io) => {
         );
 
         io.emit("commentUpdated", updatedComment);
+      } catch (err) {
+        console.log(err);
+      }
+    });
+
+    socket.on("toggleLike", async ({ postId, userId }) => {
+      const post = await Post.findById(postId);
+
+      const isLiked = post.likes.includes(userId);
+
+      if (isLiked) {
+        post.likes.pull(userId);
+        post.likesCount--;
+      } else {
+        post.likes.push(userId);
+        post.likesCount++;
+      }
+
+      await post.save();
+
+      // send updated post to ALL users
+      io.emit("postUpdated", post);
+    });
+
+    socket.on("toggleBookmark", async ({ postId, userId }) => {
+      try {
+        const post = await Post.findById(postId);
+
+        if (!post) return;
+
+        const alreadySaved = post.savedBy.includes(userId);
+
+        if (alreadySaved) {
+          post.savedBy = post.savedBy.filter((id) => id.toString() !== userId);
+        } else {
+          post.savedBy.push(userId);
+        }
+
+        await post.save();
+
+        io.emit("bookmarkUpdated", { postId, savedBy: post.savedBy });
       } catch (err) {
         console.log(err);
       }

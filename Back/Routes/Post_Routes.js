@@ -54,5 +54,16 @@ router.get("/feed", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+
+// BookMark
+router.get("/bookmarks/:userId", async (req, res) => {
+  const posts = await Post.find({
+    savedBy: req.params.userId,
+  });
+
+  res.json(posts);
+});
  
 module.exports = router;

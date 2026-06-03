@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Grid, PlusCircle, Bookmark, Contact } from "lucide-react";
 import EditProfile from "./EditProfile";
+import { socket } from "../Socket/Socket";
 
 type User = {
 
@@ -22,24 +23,11 @@ type Post = {
   createdAt: string;
 };
 
-const savedItems = [
-  {
-    id: 1,
-    src: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?w=400&h=400&fit=crop",
-    label: "beat ♡",
-  },
-  {
-    id: 2,
-    src: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=400&fit=crop",
-    label: "Java / JavaScript",
-    subLabel: "All posts",
-  },
-  {
-    id: 3,
-    src: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=400&fit=crop",
-    label: "Song",
-  },
-];
+type BookmarkUpdatedPayload = {
+  postId: string;
+  savedBy: string[];
+  post?: Post;
+};
 
 
 
@@ -52,6 +40,8 @@ const Profile: React.FC = () => {
   const [activeTag, setActiveTag] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [bookmarks, setBookmarks] = useState<Post[]>([]);
+  const [showConfirm, setShowConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -79,6 +69,64 @@ const Profile: React.FC = () => {
       .then(res => res.json())
       .then(setPosts);
   }, [user]);
+
+
+  useEffect(() => {
+    const handler = ({ postId, savedBy, post }: BookmarkUpdatedPayload) => {
+      // update posts
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, savedBy } : p
+        )
+      );
+
+      // update bookmarks list
+      setBookmarks((prev) => {
+        if (!user) return prev;
+        const exists = prev.find((p) => p._id === postId);
+
+        if (savedBy.includes(user?._id)) {
+          if (!exists && post) return [post, ...prev];
+          return prev;
+        } else {
+          return prev.filter((p) => p._id !== postId);
+        }
+      });
+    };
+
+    socket.on("bookmarkUpdated", handler);
+
+    return () => {
+      socket.off("bookmarkUpdated", handler); // ✅ FIXED
+    };
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+
+    const token = localStorage.getItem("token");
+
+    fetch(`http://localhost:5000/api/posts/bookmarks/${user._id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => setBookmarks(data))
+      .catch(console.error);
+  }, [user]);
+
+
+  useEffect(() => {
+  socket.on("postDeleted", ({ postId }) => {
+    setPosts((prev) => prev.filter((p) => p._id !== postId));
+    setBookmarks((prev) => prev.filter((p) => p._id !== postId));
+  });
+
+  return () => {
+    socket.off("postDeleted");
+  };
+}, []);
+
 
 
   if (!user) return <p>Loading...</p>;
@@ -286,6 +334,52 @@ const Profile: React.FC = () => {
 
                     {/* HOVER OVERLAY */}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
+                      {/* Trigger Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowConfirm(post._id);
+                        }}
+                        className="absolute right-5 top-1 bg-red-500 cursor-pointer text-white px-2 py-1 text-xs rounded"
+                      >
+                        Delete
+                      </button>
+
+                      {/* Small Confirm Box */}
+                      {showConfirm === post._id && (
+                        <div className="absolute right-5 top-8 bg-gray-800 shadow-lg border rounded p-2 w-40 z-50">
+                          <p className="text-xs mb-2">Delete Post?</p>
+
+                          <div className="flex justify-evenly gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowConfirm(null)
+                              }}
+                              className="text-xs px-2 py-1 bg-blue-700 rounded cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+
+                                socket.emit("deletePost", {
+                                  postId: post._id,
+                                  userId: user._id,
+                                });
+
+                                setShowConfirm(null);
+                              }}
+                              className="text-xs cursor-pointer px-2 py-1 bg-red-500 text-white rounded"
+                            >
+                              Yes
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="opacity-0 group-hover:opacity-100 text-white text-sm font-semibold">
                         View Post
                       </div>
@@ -381,6 +475,7 @@ const Profile: React.FC = () => {
         </div>
       )}
 
+
       {activeBookmark && (
         <div className="min-h-screen bg-black text-white p-4">
           {/* Header */}
@@ -390,20 +485,85 @@ const Profile: React.FC = () => {
 
           {/* Grid of saved items */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {savedItems.map((item) => (
-              <div key={item.id} className="relative group">
-                <img
-                  src={item.src}
-                  alt={item.label}
-                  className="w-full h-48 object-cover rounded-lg"
-                />
-                {/* Overlay text */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition">
-                  <p className="text-sm font-semibold">{item.label}</p>
-                  {item.subLabel && (
-                    <p className="text-xs text-gray-300">{item.subLabel}</p>
+
+            {bookmarks.map((post) => (
+              <div
+                key={post._id}
+                onClick={() => setSelectedPost(post)}
+                className="relative group aspect-square bg-black overflow-hidden cursor-pointer"
+              >
+                {post.mediaUrl?.endsWith(".mp4") ? (
+                  <video
+                    src={post.mediaUrl}
+                    controls
+                    className="w-80 max-h-[50vh] object-contain"
+                  />
+                ) : (
+                  <img
+                    src={post.mediaUrl}
+                    className="w-80 max-h-[80vh] object-contain"
+                  />
+                )}
+
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
+                  {/* Trigger Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowConfirm(post._id);
+                    }}
+                    className="absolute right-5 top-1 bg-red-500 cursor-pointer text-white px-2 py-1 text-xs rounded"
+                  >
+                    Remove
+                  </button>
+
+                  {/* Small Confirm Box */}
+                  {showConfirm === post._id && (
+                    <div className="absolute right-5 top-8 bg-gray-800 shadow-lg border rounded p-2 w-40 z-50">
+                      <p className="text-xs mb-2">Remove bookmark?</p>
+
+                      <div className="flex justify-evenly gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowConfirm(null)
+                          }}
+                          className="text-xs px-2 py-1 bg-blue-700 rounded cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+
+                            socket.emit("toggleBookmark", {
+                              postId: post._id,
+                              userId: user._id,
+                            });
+
+                            setShowConfirm(null);
+                          }}
+                          className="text-xs cursor-pointer px-2 py-1 bg-red-500 text-white rounded"
+                        >
+                          Yes
+                        </button>
+                      </div>
+                    </div>
                   )}
+                  <div className="opacity-0 group-hover:opacity-100 text-white text-sm font-semibold">
+                    View Saved Post
+                  </div>
                 </div>
+
+
+
+
+
+
+
+
+
               </div>
             ))}
           </div>
@@ -434,19 +594,17 @@ const Profile: React.FC = () => {
 
           {/* Saved items grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {savedItems.map((item) => (
-              <div key={item.id} className="relative group">
+            {bookmarks.map((post) => (
+              <div key={post._id} className="relative group">
                 <img
-                  src={item.src}
-                  alt={item.label}
+                  src={post.mediaUrl}
                   className="w-full h-48 object-cover rounded-lg"
                 />
-                {/* Overlay text */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition">
-                  <p className="text-sm font-semibold">{item.label}</p>
-                  {item.subLabel && (
-                    <p className="text-xs text-gray-300">{item.subLabel}</p>
-                  )}
+
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                  <p className="text-sm font-semibold text-white">
+                    Saved Post
+                  </p>
                 </div>
               </div>
             ))}

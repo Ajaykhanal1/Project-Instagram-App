@@ -25,6 +25,11 @@ const postSchema = new mongoose.Schema({
     },
   ],
 
+  savedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  }],
+
 
 
 

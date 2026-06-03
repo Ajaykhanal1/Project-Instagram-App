@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import ReelItem from "./ReelItem";
-import { X, Heart, MessageCircle } from "lucide-react";
+import { X, Heart, MessageCircle, Bookmark } from "lucide-react";
 import { socket } from "../Socket/Socket";
 type Post = {
     _id: string;
@@ -10,6 +10,7 @@ type Post = {
     likes: string[];
     commentCount: number;
     text: String;
+    savedBy: string[];
 };
 
 type Comment = {
@@ -187,6 +188,7 @@ export default function Reels() {
     }, []);
 
 
+
     // REALTIME UPDATE FROM SERVER
     useEffect(() => {
 
@@ -200,8 +202,21 @@ export default function Reels() {
 
         });
 
+        const handleBookmarkUpdate = ({ postId, savedBy }: any) => {
+            setPosts(prev =>
+                prev.map(post =>
+                    post._id === postId
+                        ? { ...post, savedBy }
+                        : post
+                )
+            );
+        };
+
+        socket.on("bookmarkUpdated", handleBookmarkUpdate);
+
         return () => {
             socket.off("postUpdated");
+            socket.off("bookmarkUpdated");
         };
 
     }, []);
@@ -291,7 +306,7 @@ export default function Reels() {
                     .map(post => {
 
                         const isLiked = post.likes?.includes(user?._id);
-
+                        const isSaved = !!post.savedBy?.includes(user?._id);
                         return (
                             <div
                                 key={post._id}
@@ -339,6 +354,23 @@ export default function Reels() {
 
                                     </div>
 
+                                    {/* BookMark */}
+                                    <div className="flex flex-col items-center gap-1 text-white">
+                                        <Bookmark
+                                            fill={isSaved ? "currentColor" : "none"}
+                                            className={isSaved ? "text-yellow-500" : ""}
+
+                                            onClick={() =>
+                                                socket.emit("toggleBookmark", {
+                                                    postId: post._id,
+                                                    userId: user._id,
+                                                })
+                                            }
+                                        />
+                                    </div>
+
+
+
 
 
                                 </div>
@@ -351,17 +383,30 @@ export default function Reels() {
             </div>
 
 
-            {showCommentSection && (
-                <div className="fixed inset-0 z-50 flex">
 
-                    {/* Overlay */}
-                    <div
-                        className="absolute inset-0 bg-black/60"
-                        onClick={() => setShowCommentsSection(false)}
-                    />
 
-                    {/* Comment Panel */}
-                    <div className="
+
+
+
+
+
+
+
+
+
+
+            {
+                showCommentSection && (
+                    <div className="fixed inset-0 z-50 flex">
+
+                        {/* Overlay */}
+                        <div
+                            className="absolute inset-0 bg-black/60"
+                            onClick={() => setShowCommentsSection(false)}
+                        />
+
+                        {/* Comment Panel */}
+                        <div className="
       relative ml-auto
       w-full sm:w-105
       h-full
@@ -372,70 +417,70 @@ export default function Reels() {
       overflow-hidden
     ">
 
-                        {/* Header */}
-                        <div className="flex items-center justify-center relative p-4 border-b border-gray-800">
-                            <X
-                                className="absolute left-4 cursor-pointer"
-                                onClick={() => setShowCommentsSection(false)}
-                            />
-                            <h1 className="font-semibold text-white">Comments</h1>
-                        </div>
-
-                        {/* Comments List */}
-                        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 scrollbar-hide">
-
-                            {comment.map((c) => (
-                                <CommentItem
-                                    key={c._id}
-                                    comment={c}
-                                    user={user}
-                                    handleCommentLike={handleCommentLike}
-                                    setReplyTo={setReplyTo}
-                                    expandedReplies={expandedReplies}
-                                    toggleReplies={toggleReplies}
+                            {/* Header */}
+                            <div className="flex items-center justify-center relative p-4 border-b border-gray-800">
+                                <X
+                                    className="absolute left-4 cursor-pointer"
+                                    onClick={() => setShowCommentsSection(false)}
                                 />
-                            ))}
-
-
-
-                        </div>
-
-                        {/* Input Box (Sticky Bottom like Instagram) */}
-                        {replyTo && (
-                            <div className="px-3 py-2 text-xs text-blue-400 border-t border-gray-800 flex justify-between items-center">
-                                <span>Replying to a comment...</span>
-
-                                <button
-                                    onClick={() => setReplyTo(null)}
-                                    className="text-red-400"
-                                >
-                                    cancel
-                                </button>
+                                <h1 className="font-semibold text-white">Comments</h1>
                             </div>
-                        )}
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
 
-                                if (!newComment.trim()) return;
+                            {/* Comments List */}
+                            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 scrollbar-hide">
 
-                                socket.emit("addComment", {
-                                    postId: selectedPostId,
-                                    userId: user._id,
-                                    text: newComment,
-                                    parentCommentId: replyTo || null,
-                                });
+                                {comment.map((c) => (
+                                    <CommentItem
+                                        key={c._id}
+                                        comment={c}
+                                        user={user}
+                                        handleCommentLike={handleCommentLike}
+                                        setReplyTo={setReplyTo}
+                                        expandedReplies={expandedReplies}
+                                        toggleReplies={toggleReplies}
+                                    />
+                                ))}
 
-                                setNewComment("");
-                                setReplyTo(null);
-                            }}
-                            className="border-t border-gray-800 p-3 flex items-center gap-2"
-                        >
 
-                            <input
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                className="
+
+                            </div>
+
+                            {/* Input Box (Sticky Bottom like Instagram) */}
+                            {replyTo && (
+                                <div className="px-3 py-2 text-xs text-blue-400 border-t border-gray-800 flex justify-between items-center">
+                                    <span>Replying to a comment...</span>
+
+                                    <button
+                                        onClick={() => setReplyTo(null)}
+                                        className="text-red-400"
+                                    >
+                                        cancel
+                                    </button>
+                                </div>
+                            )}
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+
+                                    if (!newComment.trim()) return;
+
+                                    socket.emit("addComment", {
+                                        postId: selectedPostId,
+                                        userId: user._id,
+                                        text: newComment,
+                                        parentCommentId: replyTo || null,
+                                    });
+
+                                    setNewComment("");
+                                    setReplyTo(null);
+                                }}
+                                className="border-t border-gray-800 p-3 flex items-center gap-2"
+                            >
+
+                                <input
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    className="
                                   flex-1
                                    bg-gray-900
                                    text-white
@@ -443,24 +488,25 @@ export default function Reels() {
                                    px-4 py-2
                                   outline-none
                                 "
-                                type="text"
-                                placeholder={
-                                    replyTo ? "Write a reply..." : "Add a comment..."
-                                }
-                            />
+                                    type="text"
+                                    placeholder={
+                                        replyTo ? "Write a reply..." : "Add a comment..."
+                                    }
+                                />
 
-                            <button
-                                type="submit"
-                                className="text-blue-500 font-semibold disabled:opacity-50"
-                                disabled={!newComment.trim()}
-                            >
-                                Send
-                            </button>
-                        </form>
+                                <button
+                                    type="submit"
+                                    className="text-blue-500 font-semibold disabled:opacity-50"
+                                    disabled={!newComment.trim()}
+                                >
+                                    Send
+                                </button>
+                            </form>
 
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
         </div>
     );
