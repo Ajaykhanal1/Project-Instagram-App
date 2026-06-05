@@ -148,7 +148,6 @@ export default function Reels() {
     const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
-        // only reset when switching post (not every comment update)
         setExpandedReplies({});
     }, [selectedPostId]);
 
@@ -196,7 +195,15 @@ export default function Reels() {
 
             setPosts(prev =>
                 prev.map(post =>
-                    post._id === updatedPost._id ? updatedPost : post
+                    post._id === updatedPost._id
+                        ? {
+                            ...post,
+                            likes: updatedPost.likes,
+                            likesCount: updatedPost.likesCount,
+                            savedBy: updatedPost.savedBy,
+                            commentCount: post.commentCount
+                        }
+                        : post
                 )
             );
 
