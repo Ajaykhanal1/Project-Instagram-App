@@ -215,7 +215,7 @@ const setupSocket = (io) => {
         // ---------------- USERS ----------------
         const users = await User.find({
           username: { $regex: regex },
-           _id: { $ne: userId },
+          _id: { $ne: userId },
         })
           .select("username displayName avatar _id")
           .limit(5);
@@ -238,7 +238,40 @@ const setupSocket = (io) => {
       }
     });
 
+    // Used in searchProfile.tsx
+    socket.on("getUserProfile", async ({ userId }, cb) => {
+      try {
+        const user = await User.findById(userId).select(
+          "username displayName avatar bio followersCount followingCount",
+        );
 
+        if (!user) return cb(null);
+
+        // optional: add post count
+        const postCount = await Post.countDocuments({ userId });
+
+        cb({
+          ...user._doc,
+          postCount,
+        });
+      } catch (err) {
+        console.log(err);
+        cb(null);
+      }
+    });
+    
+    socket.on("getUserPosts", async (userId, cb) => {
+      try {
+        const posts = await Post.find({ userId })
+          .select("mediaUrl caption createdAt")
+          .sort({ createdAt: -1 }); // newest first
+
+        cb(posts);
+      } catch (err) {
+        console.log(err);
+        cb([]);
+      }
+    });
 
 
   });

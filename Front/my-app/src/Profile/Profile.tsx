@@ -100,6 +100,8 @@ const Profile: React.FC = () => {
       socket.off("bookmarkUpdated", handler);
     };
   }, [user]);
+
+  
   useEffect(() => {
     if (!user) return;
 
@@ -181,7 +183,7 @@ const Profile: React.FC = () => {
 
             {/* Stats */}
             <div className="flex space-x-6">
-              <span><strong>{user.postsCount}</strong> posts</span>
+              <span><strong>{posts.length}</strong> posts</span>
               <span><strong>{user.followersCount}</strong> followers</span>
               <span><strong>{user.followingCount}</strong> following</span>
             </div>
