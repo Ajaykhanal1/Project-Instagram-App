@@ -10,6 +10,7 @@ import Register from "./Login_Register_Forgot_Page/Register";
 import Forgot_Password from "./Login_Register_Forgot_Page/Forgot_Password";
 import ResetPassword from "./Login_Register_Forgot_Page/Reset_Password";
 import ProtectedRoute from "./Protected_Route/Protected_Route";
+import SearchProfile from"./Search/searchProfile";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/explore" element={<Explore />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/searchProfile/:userId" element={<SearchProfile />} />
       </Route>
 
     </Routes>

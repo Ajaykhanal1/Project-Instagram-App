@@ -1,14 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search as SearchIcon, X } from "lucide-react";
+import { socket } from "../Socket/Socket";
+import { useNavigate } from "react-router-dom";
 
 type SearchComponentProps = {
   onClose: () => void;
 };
 
+type User = {
+  _id: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+};
+
+type Post = {
+  _id: string;
+  caption: string;
+  mediaUrl: string;
+  userId: {
+    username: string;
+    avatar: string;
+  };
+};
+
+type GlobalSearchResponse = {
+  users: User[];
+  posts: Post[];
+};
+
 
 export default function SearchComponent({ onClose }: SearchComponentProps) {
-
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
   const [query, setQuery] = useState("");
+  const [data, setData] = useState<GlobalSearchResponse>({
+    users: [],
+    posts: [],
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:5000/api/user/profile/me", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Unauthorized');
+        return res.json();
+      })
+      .then((data) => setUser(data))
+      .catch((err) => console.error(err));
+  }, []);
+
+  useEffect(() => {
+    if (!query) {
+      setData({ users: [], posts: [] });
+      return;
+    }
+
+    const delay = setTimeout(() => {
+      socket.emit("globalSearch", { query, userId: user?._id }, (res: GlobalSearchResponse) => {
+        setData(res);
+      });
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [query]);
 
   return (
     <div className="fixed inset-0 z-50  ">
@@ -48,13 +107,32 @@ export default function SearchComponent({ onClose }: SearchComponentProps) {
             )}
           </div>
 
-          <div>
-            <p className="text-sm text-white mb-1 font-bold">Recent</p>
-            <div className="h-120 w-full flex items-center justify-center">
-              <p className="text-gray-500 text-sm font-bold">No recent searches</p>
-
-            </div>
-
+          <div className="">
+            {data.users.map((u) => (
+              <div
+                onClick={() => {
+                  onClose();
+                  setTimeout(() => {
+                    navigate(`/searchProfile/${u._id}`);
+                  }, 0);
+                }}
+                className="flex cursor-pointer justify-start gap-2.5 m-3 p-2  hover:bg-gray-800 " key={u._id}>
+                <img className="w-15 h-15 rounded-full " src={u.avatar} width={30} />
+                <div className="flex flex-col ">
+                  <span className="text-sm">{u.username}</span>
+                  <span className="font-mono text-xl">{u.displayName}</span>
+                </div>
+              </div>
+            ))}
+            {data.posts.map((p) => (
+              <div key={p._id}>
+                <img src={p.mediaUrl} width={50} />
+                <div>
+                  <b>{p.userId?.username}</b>
+                  <p>{p.caption}</p>
+                </div>
+              </div>
+            ))}
           </div>
 
         </div>

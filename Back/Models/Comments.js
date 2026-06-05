@@ -40,4 +40,4 @@ const CommentSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Comment", CommentSchema);
+module.exports =  mongoose.models.Comment || mongoose.model("Comment", CommentSchema);

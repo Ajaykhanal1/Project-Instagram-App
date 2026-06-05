@@ -1,3 +1,4 @@
+const User = require("../models/User");
 const Post = require("../models/Post");
 const Comment = require("../Models/Comments");
 function buildCommentTree(comments) {
@@ -52,28 +53,27 @@ const setupSocket = (io) => {
     });
 
     socket.on("deletePost", async ({ postId, userId }) => {
-  try {
-    const post = await Post.findById(postId);
+      try {
+        const post = await Post.findById(postId);
 
-    if (!post) return;
+        if (!post) return;
 
-    // (IMPORTANT) Only owner can delete
-    if (post.userId.toString() !== userId) {
-      return;
-    }
+        // (IMPORTANT) Only owner can delete
+        if (post.userId.toString() !== userId) {
+          return;
+        }
 
-    await Post.findByIdAndDelete(postId);
+        await Post.findByIdAndDelete(postId);
 
-    // also delete related comments (optional but recommended)
-    await Comment.deleteMany({ postId });
+        // also delete related comments (optional but recommended)
+        await Comment.deleteMany({ postId });
 
-    // notify all clients
-    io.emit("postDeleted", { postId });
-
-  } catch (err) {
-    console.log(err);
-  }
-});
+        // notify all clients
+        io.emit("postDeleted", { postId });
+      } catch (err) {
+        console.log(err);
+      }
+    });
 
     socket.on("getComment", async ({ postId }) => {
       try {
@@ -203,6 +203,44 @@ const setupSocket = (io) => {
         console.log(err);
       }
     });
+
+    socket.on("globalSearch", async ({ query, userId }, cb) => {
+      try {
+        if (!query || !query.trim()) {
+          return cb({ users: [], posts: [] });
+        }
+
+        const regex = new RegExp(query, "i");
+
+        // ---------------- USERS ----------------
+        const users = await User.find({
+          username: { $regex: regex },
+           _id: { $ne: userId },
+        })
+          .select("username displayName avatar _id")
+          .limit(5);
+
+        // ---------------- POSTS ----------------
+        const posts = await Post.find({
+          caption: { $regex: regex },
+        })
+          .populate("userId", "username avatar")
+          .select("caption mediaUrl userId")
+          .limit(5);
+
+        return cb({
+          users,
+          posts,
+        });
+      } catch (err) {
+        console.error("global search error:", err);
+        cb({ users: [], posts: [] });
+      }
+    });
+
+
+
+
   });
 };
 
