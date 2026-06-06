@@ -13,6 +13,8 @@ type User = {
   followingCount: number;
   bio: string;
   _id: string;
+  followers: string[];
+  following: string[];
 };
 
 type Post = {
@@ -101,7 +103,7 @@ const Profile: React.FC = () => {
     };
   }, [user]);
 
-  
+
   useEffect(() => {
     if (!user) return;
 
@@ -119,15 +121,15 @@ const Profile: React.FC = () => {
 
 
   useEffect(() => {
-  socket.on("postDeleted", ({ postId }) => {
-    setPosts((prev) => prev.filter((p) => p._id !== postId));
-    setBookmarks((prev) => prev.filter((p) => p._id !== postId));
-  });
+    socket.on("postDeleted", ({ postId }) => {
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
+      setBookmarks((prev) => prev.filter((p) => p._id !== postId));
+    });
 
-  return () => {
-    socket.off("postDeleted");
-  };
-}, []);
+    return () => {
+      socket.off("postDeleted");
+    };
+  }, []);
 
 
 
@@ -184,8 +186,8 @@ const Profile: React.FC = () => {
             {/* Stats */}
             <div className="flex space-x-6">
               <span><strong>{posts.length}</strong> posts</span>
-              <span><strong>{user.followersCount}</strong> followers</span>
-              <span><strong>{user.followingCount}</strong> following</span>
+              <span><strong>{user.followers.length}</strong> followers</span>
+              <span><strong>{user.following.length}</strong> following</span>
             </div>
           </div>
         </div>

@@ -242,7 +242,7 @@ const setupSocket = (io) => {
     socket.on("getUserProfile", async ({ userId }, cb) => {
       try {
         const user = await User.findById(userId).select(
-          "username displayName avatar bio followersCount followingCount",
+          "username displayName avatar bio followers following followersCount followingCount",
         );
 
         if (!user) return cb(null);
@@ -259,7 +259,7 @@ const setupSocket = (io) => {
         cb(null);
       }
     });
-    
+
     socket.on("getUserPosts", async (userId, cb) => {
       try {
         const posts = await Post.find({ userId })
@@ -270,6 +270,67 @@ const setupSocket = (io) => {
       } catch (err) {
         console.log(err);
         cb([]);
+      }
+    });
+
+    socket.on("followUser", async ({ currentUserId, targetUserId }) => {
+      try {
+        if (currentUserId === targetUserId) return;
+
+        const currentUser = await User.findById(currentUserId);
+        const targetUser = await User.findById(targetUserId);
+
+        if (!currentUser || !targetUser) return;
+
+        const alreadyFollowing = currentUser.following.includes(targetUserId);
+
+        if (alreadyFollowing) return;
+
+        currentUser.following.push(targetUserId);
+        targetUser.followers.push(currentUserId);
+
+        await currentUser.save();
+        await targetUser.save();
+
+        io.emit("followUpdated", {
+          targetUserId,
+          followersCount: targetUser.followers.length,
+          followingCount: currentUser.following.length,
+          followerId: currentUserId,
+          isFollowing: true,
+        });
+      } catch (err) {
+        console.log(err);
+      }
+    });
+
+    socket.on("unfollowUser", async ({ currentUserId, targetUserId }) => {
+      try {
+        const currentUser = await User.findById(currentUserId);
+        const targetUser = await User.findById(targetUserId);
+
+        if (!currentUser || !targetUser) return;
+
+        currentUser.following = currentUser.following.filter(
+          (id) => id.toString() !== targetUserId,
+        );
+
+        targetUser.followers = targetUser.followers.filter(
+          (id) => id.toString() !== currentUserId,
+        );
+
+        await currentUser.save();
+        await targetUser.save();
+
+        io.emit("followUpdated", {
+          targetUserId,
+          followersCount: targetUser.followers.length,
+          followingCount: currentUser.following.length,
+          followerId: currentUserId,
+          isFollowing: false,
+        });
+      } catch (err) {
+        console.log(err);
       }
     });
 

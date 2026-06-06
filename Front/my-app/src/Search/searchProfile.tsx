@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Grid } from "lucide-react";
 import { socket } from "../Socket/Socket";
 
@@ -13,6 +13,8 @@ type User = {
   followingCount: number;
   bio: string;
   _id: string;
+  followers: string[];
+  following: string[];
 };
 
 type Post = {
@@ -23,18 +25,45 @@ type Post = {
   createdAt: string;
 };
 
+type FollowUpdatedPayload = {
+  targetUserId: string;
+  followerId: string;
+  followersCount: number;
+  isFollowing: boolean;
+};
+
 export default function SearchProfile() {
   const { userId } = useParams();
+  const [mainUser, setMainUser] = useState<User | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [activePost, setAcitvePost] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:5000/api/user/profile/me", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Unauthorized');
+        return res.json();
+      })
+      .then((data) => setMainUser(data))
+      .catch((err) => console.error(err));
+  }, []);
+
+  useEffect(() => {
     if (!userId) return;
 
     socket.emit("getUserProfile", { userId }, (res: User) => {
-      setUser(res);
+      setUser({
+        ...res,
+        followers: res.followers || [],
+        following: res.following || [],
+      });
     });
   }, [userId]);
 
@@ -46,11 +75,44 @@ export default function SearchProfile() {
     });
   }, [userId]);
 
+  useEffect(() => {
+    const handleFollowUpdated = (data: FollowUpdatedPayload) => {
+      if (data.targetUserId === userId) {
+        setUser((prev) => {
+          if (!prev) return prev;
+
+          const safeFollowers = Array.isArray(prev.followers)
+            ? prev.followers
+            : [];
+
+          const followers = data.isFollowing
+            ? [...safeFollowers, data.followerId]
+            : safeFollowers.filter((id) => id !== data.followerId);
+
+          return {
+            ...prev,
+            followers,
+            followersCount: data.followersCount,
+          };
+        });
+      }
+    };
+
+    socket.on("followUpdated", handleFollowUpdated);
+
+    return () => {
+      socket.off("followUpdated", handleFollowUpdated);
+    };
+  }, [userId]);
+
 
   const handlePost = () => {
     setAcitvePost(true);
   }
 
+
+  const isFollowing =
+    user?.followers?.includes(mainUser?._id || "") ?? false;
 
   if (!user) return <div>Loading...</div>;
 
@@ -77,16 +139,34 @@ export default function SearchProfile() {
             {/* Stats */}
             <div className="flex space-x-6">
               <span><strong>{posts.length}</strong> posts</span>
-              <span><strong>{user.followersCount}</strong> followers</span>
-              <span><strong>{user.followingCount}</strong> following</span>
+              <span><strong>{user.followers.length}</strong> followers</span>
+              <span><strong>{user.following.length}</strong> following</span>
             </div>
           </div>
         </div>
 
         {/* Buttons */}
         <div className="flex space-x-2 mt-14 w-2xl gap-10  ">
-          <button className="flex-1 bg-blue-700 py-2 rounded-lg ">
-            Follow
+          <button
+            onClick={() => {
+              if (isFollowing) {
+                socket.emit("unfollowUser", {
+                  currentUserId: mainUser?._id,
+                  targetUserId: user._id,
+                });
+              } else {
+                socket.emit("followUser", {
+                  currentUserId: mainUser?._id,
+                  targetUserId: user._id,
+                });
+              }
+            }}
+            className={`flex-1 py-2 rounded-lg ${isFollowing
+              ? "bg-gray-600 hover:bg-gray-700"
+              : "bg-blue-700 hover:bg-blue-800"
+              }`}
+          >
+            {isFollowing ? "Following" : "Follow"}
           </button>
           <button className="flex-1 bg-gray-700 py-2 rounded-lg">
             Message
@@ -108,7 +188,7 @@ export default function SearchProfile() {
 
 
       </div>
-      
+
       {activePost && (
         <>
           {posts.length > 0 ? (

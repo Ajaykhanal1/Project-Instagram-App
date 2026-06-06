@@ -31,7 +31,6 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
-
     // ================= PROFILE =================
     bio: {
       type: String,
@@ -60,6 +59,20 @@ const UserSchema = new mongoose.Schema(
       default: 0,
     },
 
+    followers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    following: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    
     // ================= INSTAGRAM FEATURES =================
     highlights: [
       {
@@ -116,7 +129,7 @@ const UserSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 module.exports = mongoose.models.User || mongoose.model("User", UserSchema);
