@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const Post = require("../models/Post");
 const Comment = require("../Models/Comments");
+const Notification = require("../models/Notification");
 function buildCommentTree(comments) {
   const map = {};
   const roots = [];
@@ -292,6 +293,22 @@ const setupSocket = (io) => {
         await currentUser.save();
         await targetUser.save();
 
+        await Notification.create({
+          toUserId: targetUserId,
+          fromUserId: currentUserId,
+          fromAvatar: currentUser.avatar,
+          type: "follow",
+          message: `${currentUser.username} started following you`,
+        });
+
+        io.to(targetUserId).emit("newNotification", {
+          type: "follow",
+          message: `${currentUser.username} started following you`,
+          fromUserId: currentUserId,
+          fromUsername: currentUser.username,
+          fromAvatar: currentUser.avatar,
+        });
+
         io.emit("followUpdated", {
           targetUserId,
           followersCount: targetUser.followers.length,
@@ -334,7 +351,13 @@ const setupSocket = (io) => {
       }
     });
 
+    socket.on("getNotifications", async ({ userId }, cb) => {
+      const notifications = await Notification.find({ toUserId: userId })
+        .sort({ createdAt: -1 })
+        .limit(20);
 
+      cb(notifications);
+    });
   });
 };
 
