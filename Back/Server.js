@@ -7,6 +7,7 @@ const path = require("path");
 const authRoutes = require("./Routes/Authentication_Routes");
 const profileRoutes = require("./Routes/Profile_Routes");
 const postRoutes = require("./Routes/Post_Routes");
+const messageRoutes = require("./Routes/Message");
 
 
 const http = require("http");
@@ -29,6 +30,8 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/user", profileRoutes);
 app.use("/api/posts", postRoutes);
+
+app.use("/api/messages", messageRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 mongoose
   .connect(process.env.MONGO_URI)

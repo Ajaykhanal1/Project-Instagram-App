@@ -2,6 +2,8 @@ import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Grid } from "lucide-react";
 import { socket } from "../Socket/Socket";
+import { useNavigate } from "react-router-dom";
+
 
 type User = {
 
@@ -33,6 +35,7 @@ type FollowUpdatedPayload = {
 };
 
 export default function SearchProfile() {
+  const navigate = useNavigate();
   const { userId } = useParams();
   const [mainUser, setMainUser] = useState<User | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -168,7 +171,10 @@ export default function SearchProfile() {
           >
             {isFollowing ? "Following" : "Follow"}
           </button>
-          <button className="flex-1 bg-gray-700 py-2 rounded-lg">
+          <button
+            className="flex-1 bg-gray-700 py-2 rounded-lg"
+            onClick={() => navigate(`/messages/${user._id}`)}
+          >
             Message
           </button>
         </div>

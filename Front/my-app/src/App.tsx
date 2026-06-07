@@ -27,6 +27,7 @@ export default function App() {
         <Route path="/reels" element={<Reels />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/messages" element={<Messages />} />
+        <Route path="/messages/:userId" element={<Messages />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/searchProfile/:userId" element={<SearchProfile />} />
       </Route>

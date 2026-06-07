@@ -1,5 +1,8 @@
 const User = require("../models/User");
 const Post = require("../models/Post");
+const Message = require("../models/Message");
+const Conversation = require("../models/Conversation");
+
 const Comment = require("../Models/Comments");
 const Notification = require("../models/Notification");
 function buildCommentTree(comments) {
@@ -27,6 +30,9 @@ function buildCommentTree(comments) {
 
   return roots;
 }
+// Create Room Name
+const getConversationId = (a, b) =>
+  [a.toString(), b.toString()].sort().join("-");
 
 const setupSocket = (io) => {
   io.on("connection", (socket) => {
@@ -357,6 +363,122 @@ const setupSocket = (io) => {
         .limit(20);
 
       cb(notifications);
+    });
+
+    socket.on("join_user_room", (userId) => {
+      if (!userId) return;
+      socket.join(userId.toString());
+    });
+    // Create Room id and Join room
+    socket.on("join_private_chat", ({ userA, userB }) => {
+      const conversationId = getConversationId(userA, userB);
+      socket.join(conversationId);
+      socket.emit("room_ready", conversationId);
+    });
+
+    // Receive Message From front , Store In Message/Conversation and send back to front
+    socket.on("send_message", async ({ sender, receiver, message }) => {
+      try {
+        const conversationId = getConversationId(sender, receiver);
+
+        // 1. Save message with proper structure (don't populate yet)
+        const newMessage = await Message.create({
+          sender,
+          receiver,
+          message,
+          timestamp: new Date(),
+          read: false
+        });
+
+        // 2. Update or create conversation
+        let conversation = await Conversation.findOne({ conversationId });
+
+        if (!conversation) {
+          conversation = await Conversation.create({
+            conversationId,
+            participants: [sender, receiver],
+            lastMessage: message,
+            unreadCount: new Map([[receiver, 1]]),
+            updatedAt: new Date(),
+          });
+        } else {
+          conversation.lastMessage = message;
+          const current = conversation.unreadCount.get(receiver) || 0;
+          conversation.unreadCount.set(receiver, current + 1);
+          conversation.updatedAt = new Date();
+          await conversation.save();
+        }
+
+        // 3. Send message with plain IDs (not populated objects)
+        // This matches what your frontend expects from the REST API
+        const messageToSend = {
+          _id: newMessage._id,
+          sender: newMessage.sender.toString(),
+          receiver: newMessage.receiver.toString(),
+          message: newMessage.message,
+          timestamp: newMessage.timestamp,
+          read: newMessage.read
+        };
+
+        // 4. Emit to room
+        io.to(conversationId).emit("new_message", messageToSend);
+
+        // 5. Emit conversation update to both users
+        const conversationUpdate = {
+          conversationId: conversation._id,
+          _id: conversation._id,
+          userId: receiver.toString(),
+          lastMessage: message,
+          updatedAt: conversation.updatedAt,
+        };
+
+        // Send to sender
+        io.to(sender.toString()).emit("conversation_update", {
+          ...conversationUpdate,
+          userId: receiver.toString(),
+        });
+
+        // Send to receiver
+        io.to(receiver.toString()).emit("conversation_update", {
+          ...conversationUpdate,
+          userId: sender.toString(),
+        });
+
+      } catch (err) {
+        console.error("send_message error:", err);
+      }
+    });
+
+
+
+
+
+
+
+
+
+    socket.on("mark_read", async ({ sender, receiver }) => {
+      const conversationId = getConversationId(sender, receiver);
+
+      await Message.updateMany(
+        {
+          sender: sender,
+          receiver: receiver,
+          read: false,
+        },
+        {
+          $set: { read: true },
+        },
+      );
+
+      await Conversation.updateOne(
+        { conversationId },
+        {
+          $set: {
+            [`unreadCount.${receiver}`]: 0,
+          },
+        },
+      );
     });
   });
 };
