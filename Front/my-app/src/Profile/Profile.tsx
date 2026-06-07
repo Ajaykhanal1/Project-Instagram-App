@@ -61,6 +61,8 @@ const Profile: React.FC = () => {
   }, []);
 
   useEffect(() => {
+      if (!user?._id) return;
+
     const token = localStorage.getItem("token");
     if (!token) return;
     fetch(`http://localhost:5000/api/posts/posts/${user?._id}`, {
@@ -69,8 +71,9 @@ const Profile: React.FC = () => {
       },
     })
       .then(res => res.json())
-      .then(setPosts);
-  }, [user]);
+      .then(setPosts)
+      .catch(console.error);
+  }, [user?._id]);
 
 
   useEffect(() => {
@@ -185,7 +188,7 @@ const Profile: React.FC = () => {
 
             {/* Stats */}
             <div className="flex space-x-6">
-              <span><strong>{posts.length}</strong> posts</span>
+              <span><strong>{posts?.length}</strong> posts</span>
               <span><strong>{user.followers.length}</strong> followers</span>
               <span><strong>{user.following.length}</strong> following</span>
             </div>
@@ -306,9 +309,6 @@ const Profile: React.FC = () => {
         )}
 
       </div>
-
-
-
 
 
 
