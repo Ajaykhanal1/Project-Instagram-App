@@ -1,0 +1,26 @@
+{
+  "name": "instagram",
+  "version": "1.0.0",
+  "description": "<img width=\"667\" height=\"862\" alt=\"image\" src=\"https://github.com/user-attachments/assets/de654965-7f5f-432f-ab2b-f4a36eed4808\" />",
+  "main": "index.js",
+  "scripts": {
+    "server": "npm run dev --prefix back",
+    "client": "npm run dev --prefix front/my-app",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ajaykhanal1/Project-Instagram-App.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Ajaykhanal1/Project-Instagram-App/issues"
+  },
+  "homepage": "https://github.com/Ajaykhanal1/Project-Instagram-App#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
