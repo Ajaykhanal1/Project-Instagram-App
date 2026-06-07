@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const Post = require("../models/Post");
-const {upload} = require("../middleware/upload");
-const {verifyToken} = require("../middleware/Authentication");
+const { upload } = require("../middleware/upload");
+const { verifyToken } = require("../middleware/Authentication");
 
 /* =========================
    UPLOAD POST (USER BASED)
 ========================= */
-router.post("/upload",verifyToken, upload.single("file"), async (req, res) => {
+router.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
   try {
     const { userId } = req.body;
     const file = req.file;
@@ -49,15 +49,15 @@ router.get("/posts/:userId", verifyToken, async (req, res) => {
 router.get("/feed", async (req, res) => {
   try {
     const posts = await Post.find()
-    .sort({ createdAt: -1 })
-    .populate("userId", "username displayName avatar");
-    res.json(posts);
+      .sort({ createdAt: -1 })
+      .populate("userId", "username displayName avatar");
+    const shuffled = posts.sort(() => Math.random() - 0.5);
+
+    res.json(shuffled);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 // BookMark
 router.get("/bookmarks/:userId", async (req, res) => {
@@ -67,5 +67,5 @@ router.get("/bookmarks/:userId", async (req, res) => {
 
   res.json(posts);
 });
- 
+
 module.exports = router;
