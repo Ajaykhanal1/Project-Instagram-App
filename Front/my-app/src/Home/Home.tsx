@@ -1,26 +1,59 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat, SendHorizonal } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { dummyPosts, type Post } from "./DummyPost";
+import { useEffect, useRef, useState } from 'react';
 import SmartVideo from "./SmartVideo";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
+
+type User = {
+    _id: string;
+    username: string;
+    displayName: string;
+    avatar: string;
+    postsCount: number;
+    followersCount: number;
+    followingCount: number;
+    bio: string;
+    followers: string[];
+    following: string[];
+};
+
+type Post = {
+    _id: string;
+    userId: {
+        _id: string;
+        username: string;
+        displayName: string;
+        avatar: string;
+    };
+    mediaUrl: string;
+    type: "image" | "video";
+    likesCount: number;
+    comments: string;
+    savedBy: string[];
+    createdAt: string;
+    shares: string;
+};
+
+type Connections = {
+    followers: User[];
+    following: User[];
+};
 
 
 const Home = () => {
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const navigate = useNavigate();
+    const [connections, setConnections] = useState<Connections>({
+        followers: [],
+        following: [],
+    });
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const users = [
-        { name: "Zee Isgreat", username: "_zeeisgreat", profilePicture: "https://randomuser.me/api/portraits/women/1.jpg" },
-        { name: "Suva Orth", username: "_suvha_or...", profilePicture: "https://randomuser.me/api/portraits/men/2.jpg" },
-        { name: "Aditya Singh", username: "ig_adityasi...", profilePicture: "https://randomuser.me/api/portraits/men/3.jpg" },
-        { name: "Shreeti Sanjay", username: "shrectisanj...", profilePicture: "https://randomuser.me/api/portraits/women/4.jpg" },
-        { name: "Little Ace", username: "littlez_ace", profilePicture: "https://randomuser.me/api/portraits/men/5.jpg" },
-        { name: "Revolve Fitness", username: "revolvefitn...", profilePicture: "https://randomuser.me/api/portraits/women/6.jpg" },
-        { name: "Tech Guru", username: "tech_guru", profilePicture: "https://randomuser.me/api/portraits/men/7.jpg" },
-        { name: "Code Master", username: "code_master", profilePicture: "https://randomuser.me/api/portraits/women/8.jpg" },
-        { name: "Cyber Punk", username: "cyber_punk", profilePicture: "https://randomuser.me/api/portraits/men/9.jpg" },
-        { name: "Python Dev", username: "python_dev", profilePicture: "https://randomuser.me/api/portraits/women/10.jpg" }
-    ];
 
     const scroll = (direction: 'left' | 'right') => {
         if (scrollRef.current) {
@@ -41,6 +74,109 @@ const Home = () => {
             setShowRightArrow(scrollLeft + clientWidth < scrollWidth - 20);
         }
     };
+
+    // ================= GET LOGGED IN USER =================
+    useEffect(() => {
+        const fetchUser = async () => {
+            try {
+                const token = localStorage.getItem("token");
+
+                const res = await fetch(
+                    "http://localhost:5000/api/user/profile/me",
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    }
+                );
+
+                if (!res.ok) throw new Error("Unauthorized");
+
+                const data = await res.json();
+                setUser(data);
+            } catch (err) {
+                console.log(err);
+            }
+        };
+
+        fetchUser();
+    }, []);
+    // ================= GET FOLLOWERS + FOLLOWING =================
+    useEffect(() => {
+        if (!user?._id) return;
+
+        const fetchConnections = async () => {
+            try {
+                const res = await axios.get(
+                    `http://localhost:5000/api/user/connections/${user._id}`
+                );
+
+                setConnections(res.data);
+            } catch (err) {
+                console.log(err);
+            }
+        };
+
+        fetchConnections();
+    }, [user?._id]);
+
+    // ================= MIX LIST =================
+    const mixedUsers = Array.from(
+        new Map(
+            [
+                ...connections.followers.map((u) => ({
+                    ...u,
+                    type: "Follower",
+                })),
+                ...connections.following.map((u) => ({
+                    ...u,
+                    type: "Following",
+                })),
+            ].map((item) => [item._id, item]) // 👈 unique by _id
+        ).values()
+    );
+
+    useEffect(() => {
+        const fetchFeed = async () => {
+            try {
+                const res = await axios.get("http://localhost:5000/api/posts/feed");
+                setPosts(res.data);
+            } catch (err) {
+                console.log(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchFeed();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="h-screen flex items-center justify-center text-white bg-black">
+                Loading feed...
+            </div>
+        );
+    }
+
+    const timeAgo = (date: string) => {
+        const now = new Date();
+        const postDate = new Date(date);
+
+        const diff = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+
+        const minutes = Math.floor(diff / 60);
+        const hours = Math.floor(diff / 3600);
+        const days = Math.floor(diff / 86400);
+        const years = Math.floor(days / 365);
+
+        if (diff < 60) return `${diff}s`;
+        if (minutes < 60) return `${minutes}m`;
+        if (hours < 24) return `${hours}h`;
+        if (days < 365) return `${days}d`;
+        return `${years}y`;
+    };
+
 
     return (
         <div className="overflow-x-auto custom-scrollbar flex flex-col w-full h-full items-center bg-black text-white">
@@ -66,15 +202,18 @@ const Home = () => {
                     className="flex overflow-x-auto scrollbar-hide p-4 gap-7"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
-                    {users.map((user, index) => (
-                        <div key={index} className="flex flex-col items-center gap-1 shrink-0">
+                    {mixedUsers.map((user) => (
+                        <div
+                            key={user._id}
+                            onClick={() => navigate(`/searchProfile/${user._id}`)}
+                            className="flex flex-col items-center gap-1 shrink-0">
                             {/* Story Ring */}
                             <div className="relative">
                                 <div className="w-20 h-20 rounded-full bg-linear-to-tr from-yellow-400 to-red-500 p-0.5">
                                     <div className="w-full h-full rounded-full bg-white p-0.5">
                                         <img
-                                            src={user.profilePicture}
-                                            alt={user.name}
+                                            src={user.avatar}
+                                            alt={user.displayName}
                                             className="w-full h-full rounded-full object-cover"
                                         />
                                     </div>
@@ -84,7 +223,7 @@ const Home = () => {
                                     <div className="w-3 h-3 rounded-full"></div>
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-600 font-medium">{user.username}</p>
+                            <p className="text-xs text-gray-600 font-medium">{user.displayName}</p>
                         </div>
                     ))}
                 </div>
@@ -102,37 +241,40 @@ const Home = () => {
                     </button>
                 )}
             </div>
+
+
+
             {/* Posts */}
-            {dummyPosts.map((post: Post) => (
-                <div key={post.id} className="mt-4">
+            {posts.map((post: Post) => (
+                <div key={post._id} className="mt-4">
 
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <img className="w-10 h-10 rounded-full object-cover" src={post.userImage} alt="" />
+                            <img className="w-10 h-10 rounded-full object-cover" src={post.userId?.avatar} alt="" />
                             <div>
                                 <div className="flex items-center gap-1 text-sm">
-                                    <h2>{post.userName}</h2>
-                                    <p>{post.timeAgo}</p>
+                                    <h2>{post.userId?.username}</h2>
+                                    <p>{timeAgo(post.createdAt)}</p>
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                    <p>{post.suggestionText}</p>
+                                    <p>Suggestion text</p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-3 text-sm font-medium cursor-pointer">
-                            <p className=' text-blue-500 '>{post.isFollowing ? 'Following' : 'Follow'}</p>
+                            <p className=' text-blue-500 '>Follow</p>
                             <MoreHorizontal />
                         </div>
                     </div>
 
                     <div className="w-90 h-100 bg-amber-50">
-                        {post.postVideo ? (
-                                <SmartVideo src={post.postVideo} />
+                        {post.type === "video" ? (
+                            <SmartVideo src={post.mediaUrl} />
                         ) : (
                             <img
                                 className="w-full h-full object-cover"
-                                src={post.postImage}
+                                src={post.mediaUrl}
                                 alt="post"
                             />
                         )}
@@ -141,7 +283,7 @@ const Home = () => {
                     <div>
                         <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center gap-6">
-                                <ActionItem icon={<Heart />} text={post.likes} />
+                                <ActionItem icon={<Heart />} text={post.likesCount} />
                                 <ActionItem icon={<MessageCircle />} text={post.comments} />
                                 <ActionItem icon={<Repeat />} text={post.shares} />
                                 <ActionItem icon={<SendHorizonal />} text="" />
@@ -151,7 +293,7 @@ const Home = () => {
                             </div>
                         </div>
                         <div className="mt-1 text-sm">
-                            <p>{post.caption}</p>
+                            <p>Caption needed!</p>
                         </div>
                     </div>
                 </div>

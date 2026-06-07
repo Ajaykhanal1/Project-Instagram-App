@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const postSchema = new mongoose.Schema({
   userId: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
     required: true,
   },
   mediaUrl: {
@@ -25,17 +26,12 @@ const postSchema = new mongoose.Schema({
     },
   ],
 
-  savedBy: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  }],
-
-
-
-
-
-
-  
+  savedBy: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
 
   reposted: {
     type: Number,

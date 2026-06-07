@@ -48,7 +48,9 @@ router.get("/posts/:userId", verifyToken, async (req, res) => {
 ========================= */
 router.get("/feed", async (req, res) => {
   try {
-    const posts = await Post.find().sort({ createdAt: -1 });
+    const posts = await Post.find()
+    .sort({ createdAt: -1 })
+    .populate("userId", "username displayName avatar");
     res.json(posts);
   } catch (err) {
     res.status(500).json({ error: err.message });
