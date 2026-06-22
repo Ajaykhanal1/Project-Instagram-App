@@ -377,75 +377,102 @@ const setupSocket = (io) => {
     });
 
     // Receive Message From front , Store In Message/Conversation and send back to front
-    socket.on("send_message", async ({ sender, receiver, message }) => {
+    socket.on("send_message", async ({ sender, receiver, message }, callback) => {
       try {
+        // 1. Basic validation
+        if (!sender || !receiver || !message?.trim()) {
+          return callback?.({
+            success: false,
+            error: "Invalid payload: sender, receiver, or message missing",
+          });
+        }
+
+        const trimmedMessage = message.trim();
+
         const conversationId = getConversationId(sender, receiver);
 
-        // 1. Save message with proper structure (don't populate yet)
+        // 2. Create message safely
         const newMessage = await Message.create({
           sender,
           receiver,
-          message,
+          message: trimmedMessage,
           timestamp: new Date(),
-          read: false
+          read: false,
         });
 
-        // 2. Update or create conversation
+        if (!newMessage) {
+          return callback?.({
+            success: false,
+            error: "Failed to create message",
+          });
+        }
+
+        // 3. Update / create conversation
         let conversation = await Conversation.findOne({ conversationId });
 
         if (!conversation) {
           conversation = await Conversation.create({
             conversationId,
             participants: [sender, receiver],
-            lastMessage: message,
-            unreadCount: new Map([[receiver, 1]]),
+            lastMessage: trimmedMessage,
+            unreadCount: new Map([[receiver.toString(), 1]]),
             updatedAt: new Date(),
           });
         } else {
-          conversation.lastMessage = message;
-          const current = conversation.unreadCount.get(receiver) || 0;
-          conversation.unreadCount.set(receiver, current + 1);
+          conversation.lastMessage = trimmedMessage;
           conversation.updatedAt = new Date();
+
+          const current = conversation.unreadCount.get(receiver.toString()) || 0;
+          conversation.unreadCount.set(receiver.toString(), current + 1);
+
           await conversation.save();
         }
 
-        // 3. Send message with plain IDs (not populated objects)
-        // This matches what your frontend expects from the REST API
+        // 4. Prepare message payload
         const messageToSend = {
           _id: newMessage._id,
-          sender: newMessage.sender.toString(),
-          receiver: newMessage.receiver.toString(),
-          message: newMessage.message,
+          sender: sender.toString(),
+          receiver: receiver.toString(),
+          message: trimmedMessage,
           timestamp: newMessage.timestamp,
-          read: newMessage.read
+          read: false,
         };
 
-        // 4. Emit to room
+        // 5. Emit message to conversation room
         io.to(conversationId).emit("new_message", messageToSend);
 
-        // 5. Emit conversation update to both users
-        const conversationUpdate = {
+        // 6. Emit conversation updates
+        const baseUpdate = {
           conversationId: conversation._id,
           _id: conversation._id,
-          userId: receiver.toString(),
-          lastMessage: message,
+          lastMessage: trimmedMessage,
           updatedAt: conversation.updatedAt,
         };
 
-        // Send to sender
         io.to(sender.toString()).emit("conversation_update", {
-          ...conversationUpdate,
+          ...baseUpdate,
           userId: receiver.toString(),
         });
 
-        // Send to receiver
         io.to(receiver.toString()).emit("conversation_update", {
-          ...conversationUpdate,
+          ...baseUpdate,
           userId: sender.toString(),
+        });
+
+        // 7. ACK success back to sender
+        callback?.({
+          success: true,
+          message: messageToSend,
         });
 
       } catch (err) {
         console.error("send_message error:", err);
+
+        // 8. Send error back to client
+        callback?.({
+          success: false,
+          error: "Internal server error while sending message",
+        });
       }
     });
 
@@ -479,6 +506,72 @@ const setupSocket = (io) => {
           },
         },
       );
+    });
+
+
+    socket.on("search-user", async (query) => {
+      if (!query) {
+        return socket.emit("search-result", []);
+      }
+
+      const result = await User.find({
+        displayName: { $regex: query, $options: "i" },
+      }); // limit suggestions
+
+      socket.emit("search-result", result);
+    });
+
+    socket.on("open_chat", async ({ userA, userB }, cb) => {
+      try {
+        if (!userA || !userB) {
+          return cb?.({ success: false, error: "Missing users" });
+        }
+
+        const conversationId = getConversationId(userA, userB);
+
+        let conversation = await Conversation.findOne({ conversationId });
+
+        if (!conversation) {
+          conversation = await Conversation.create({
+            conversationId,
+            participants: [userA, userB],
+            lastMessage: "",
+            unreadCount: new Map(),
+            updatedAt: new Date(),
+          });
+        }
+
+        // 🔥 GET OTHER USER INFO (VERY IMPORTANT)
+        const otherUser = await User.findById(userB).select(
+          "username displayName avatar"
+        );
+
+        const payload = {
+          conversationId: conversation.conversationId,
+          _id: conversation._id,
+          userId: userB,
+          username: otherUser?.username,
+          displayName: otherUser?.displayName,
+          avatar: otherUser?.avatar,
+          lastMessage: conversation.lastMessage,
+          updatedAt: conversation.updatedAt,
+        };
+
+        // update sender list instantly
+        io.to(userA.toString()).emit("conversation_update", payload);
+
+        // also update receiver list
+        io.to(userB.toString()).emit("conversation_update", {
+          ...payload,
+          userId: userA,
+        });
+
+        cb?.({ success: true, conversation: payload });
+
+      } catch (err) {
+        console.error("open_chat error:", err);
+        cb?.({ success: false, error: "Failed to open chat" });
+      }
     });
   });
 };

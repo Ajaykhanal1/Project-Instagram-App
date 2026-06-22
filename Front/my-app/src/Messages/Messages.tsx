@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../Socket/Socket";
 import { useParams } from "react-router-dom";
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button";
 
 type User = {
   _id: string;
@@ -41,6 +40,21 @@ export default function Message() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(userId ?? null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Search User Conversation Section
+  const [query, setQuery] = useState("");
+
+  const [suggestions, setSuggestions] = useState<User[]>([]);
+  useEffect(() => {
+    socket.on("search-result", (data) => {
+      setSuggestions(data);
+    });
+
+    return () => { socket.off("search-result"); }
+  }, []);
+
+
+
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -84,17 +98,67 @@ export default function Message() {
   }, [user?._id, activeChat]);
 
   // Send Message with optimistic update
-  const sendMessage = () => {
-  if (!message.trim() || !user?._id || !activeChat) return;
+  const sendMessage = async () => {
+    try {
+      // 1. Validate socket connection
+      if (!socket || !socket.connected) {
+        console.error("Socket is not connected");
+        return;
+      }
 
-  socket.emit("send_message", {
-    sender: user._id,
-    receiver: activeChat,
-    message: message.trim(),
-  });
+      // 2. Validate user
+      if (!user?._id) {
+        console.error("User not found or not logged in");
+        return;
+      }
 
-  setMessage("");
-};
+      // 3. Validate active chat
+      if (!activeChat) {
+        console.error("No active chat selected");
+        return;
+      }
+
+      // 4. Validate message
+      const trimmedMessage = message.trim();
+      if (!trimmedMessage) {
+        console.error("Message cannot be empty");
+        return;
+      }
+
+      // 5. Emit join room (safe to call multiple times, but ideally move this elsewhere)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      socket.emit("join_user_room", user._id, (response: any) => {
+        if (response?.error) {
+          console.error("Failed to join room:", response.error);
+        }
+      });
+
+      // 6. Send message with acknowledgement (recommended)
+      socket.emit(
+        "send_message",
+        {
+          sender: user._id,
+          receiver: activeChat,
+          message: trimmedMessage,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (ack: any) => {
+          if (ack?.error) {
+            console.error("Message failed to send:", ack.error);
+            return;
+          }
+
+          console.log("Message sent successfully:", ack);
+        }
+      );
+
+      // 7. Clear input only after emit
+      setMessage("");
+
+    } catch (error) {
+      console.error("Unexpected error while sending message:", error);
+    }
+  };
 
   // Receive message - FIXED: Prevent duplicates
   useEffect(() => {
@@ -102,19 +166,19 @@ export default function Message() {
       setMessages((prev) => {
         // Check if message already exists
         const exists = prev.some(
-          (m) => 
-            m._id === msg._id || 
-            (m.sender === msg.sender && 
-             m.receiver === msg.receiver && 
-             m.message === msg.message && 
-             Math.abs(new Date(m.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 1000)
+          (m) =>
+            m._id === msg._id ||
+            (m.sender === msg.sender &&
+              m.receiver === msg.receiver &&
+              m.message === msg.message &&
+              Math.abs(new Date(m.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 1000)
         );
-        
+
         if (exists) return prev;
-        
+
         // Remove temp message if it exists
         const filtered = prev.filter((m) => !m._id?.toString().startsWith("temp-"));
-        
+
         return [...filtered, msg];
       });
     };
@@ -152,11 +216,11 @@ export default function Message() {
         const res = await fetch(
           `http://localhost:5000/api/messages/messages?sender=${user?._id}&receiver=${activeChat}`
         );
-        
+
         if (!res.ok) throw new Error("Failed to fetch messages");
-        
+
         const data = await res.json();
-        
+
         if (isMounted && Array.isArray(data)) {
           // Sort messages by timestamp
           const sortedMessages = data.sort(
@@ -179,14 +243,14 @@ export default function Message() {
   // Fetch Conversations with deduplication
   useEffect(() => {
     if (!user?._id) return;
-    
+
     async function fetchConversations() {
       try {
         const res = await fetch(`http://localhost:5000/api/messages/conversations/${user?._id}`);
         if (!res.ok) throw new Error("Failed to fetch conversations");
-        
+
         const data = await res.json();
-        
+
         if (Array.isArray(data)) {
           // Deduplicate conversations by userId
           const uniqueConversations = data.reduce((acc: Conversation[], current: Conversation) => {
@@ -195,14 +259,14 @@ export default function Message() {
             }
             return acc;
           }, []);
-          
+
           setConversations(uniqueConversations);
         }
       } catch (error) {
         console.error("Error fetching conversations:", error);
       }
     }
-    
+
     fetchConversations();
   }, [user?._id]);
 
@@ -214,7 +278,7 @@ export default function Message() {
 
       setConversations((prev) => {
         const existingIndex = prev.findIndex(c => c.userId === data.userId);
-        
+
         let updated;
         if (existingIndex !== -1) {
           updated = [...prev];
@@ -222,7 +286,7 @@ export default function Message() {
         } else {
           updated = [data, ...prev];
         }
-        
+
         return updated.sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
@@ -236,25 +300,36 @@ export default function Message() {
     };
   }, [user?._id]);
 
-  const handleSelectChat = useCallback((chat: Conversation) => {
-    if (activeChat === chat.userId) return;
-    
-    setActiveChat(chat.userId);
-    setMessages([]); // Clear messages when switching chats
-    
-    setReceiver({
-      _id: chat.userId,
-      username: chat.username,
-      displayName: chat.displayName,
-      online: false,
-      avatar: chat.avatar,
-    });
-    
-    socket.emit("join_private_chat", {
-      userA: user?._id,
-      userB: chat.userId,
-    });
-  }, [activeChat, user?._id]);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handleSelectChat = useCallback((chat: any) => {
+  if (!user?._id) return;
+
+  const receiverId = chat.userId || chat._id;
+
+  setActiveChat(receiverId);
+  setMessages([]);
+
+  setReceiver({
+    _id: receiverId,
+    username: chat.username,
+    displayName: chat.displayName,
+    avatar: chat.avatar,
+    online: false,
+  });
+
+  socket.emit("open_chat", {
+    userA: user._id,
+    userB: receiverId,
+  });
+}, [user]);
+
+
+  // Search User Conversation Section 
+  const handleChange = (value: string) => {
+    setQuery(value);
+    socket.emit("search-user", value);
+  };
+  const showSuggestions = query.trim().length > 0;
 
   return (
     <div className="flex h-screen bg-gray-100 text-black mx-auto">
@@ -264,39 +339,84 @@ export default function Message() {
           <div className="flex flex-col">
             <h2 className="text-xl font-bold">Messages</h2>
             <div className="flex justify-between  items-center gap-2">
-              <Input placeholder="Search User"/>
-              <Button className="bg-black" variant="outline">Search</Button>
+              <Input
+                value={query}
+                onChange={(e) => handleChange(e.target.value)}
+                placeholder="Search User" />
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {conversations.map((chat) => (
-            <div
-              key={chat.conversationId}
-              onClick={() => handleSelectChat(chat)}
-              className="flex items-center gap-3 p-4 hover:bg-gray-800 cursor-pointer"
-            >
-              <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold overflow-hidden">
-                {chat?.avatar ? (
-                  <img className="rounded-full w-12 h-12 object-cover" src={chat.avatar} alt="Avatar" />
-                ) : (
-                  <div className="w-12 h-12 bg-gray-400 flex items-center justify-center text-white">
-                    {(chat.displayName || chat.username)?.[0]?.toUpperCase()}
-                  </div>
-                )}
-              </div>
 
-              <div className="flex-1 overflow-hidden">
-                <p className="font-semibold ">
-                  {chat.displayName || chat.username}
-                </p>
-                <p className="text-sm text-gray-500 truncate">
-                  {chat.lastMessage || "No messages yet"}
-                </p>
+
+          {showSuggestions
+            ? suggestions.map((user) => (
+              <div
+                key={user._id}
+                className="flex items-center gap-3 p-4 hover:bg-gray-800 cursor-pointer"
+                onClick={() => {
+                  setQuery("");
+                  setSuggestions([]);
+                  setReceiver(user);
+                  handleSelectChat({
+                    conversationId: "",
+                    _id: "",
+                    userId: user._id,
+                    avatar: user.avatar,
+                    username: user.username,
+                    displayName: user.displayName,
+                    lastMessage: "",
+                    updatedAt: new Date().toISOString(),
+                  });
+
+
+                }}
+              >
+                <div className="w-12 h-12 rounded-full bg-gray-300 overflow-hidden">
+                  {user.avatar ? (
+                    <img src={user.avatar} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      {user.displayName?.[0]}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="font-semibold">{user.displayName}</p>
+                  <p className="text-sm text-gray-400">@{user.username}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+            : conversations.map((chat) => (
+              <div
+                key={chat.conversationId}
+                onClick={() => handleSelectChat(chat)}
+                className="flex items-center gap-3 p-4 hover:bg-gray-800 cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold overflow-hidden">
+                  {chat?.avatar ? (
+                    <img className="rounded-full w-12 h-12 object-cover" src={chat.avatar} alt="Avatar" />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-400 flex items-center justify-center text-white">
+                      {(chat.displayName || chat.username)?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                  <p className="font-semibold ">
+                    {chat.displayName || chat.username}
+                  </p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {chat.lastMessage || "No messages yet"}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+
         </div>
       </div>
 
@@ -330,24 +450,22 @@ export default function Message() {
             {messages.map((msg, index) => {
               // FIXED: Compare sender with user._id to determine if message is mine
               const isMine = msg.sender === user?._id;
-              
+
               return (
                 <div
                   key={msg._id || index}
                   className={`flex ${isMine ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm ${
-                      isMine
-                        ? "bg-blue-500 text-white"
-                        : "bg-white text-gray-900"
-                    }`}
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm ${isMine
+                      ? "bg-blue-500 text-white"
+                      : "bg-white text-gray-900"
+                      }`}
                   >
                     <p className="wrap-break-word">{msg.message}</p>
                     <p
-                      className={`text-[10px] mt-1 ${
-                        isMine ? "text-blue-100" : "text-gray-400"
-                      }`}
+                      className={`text-[10px] mt-1 ${isMine ? "text-blue-100" : "text-gray-400"
+                        }`}
                     >
                       {new Date(msg.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
