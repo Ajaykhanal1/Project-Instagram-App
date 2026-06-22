@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../Socket/Socket";
 import { useParams } from "react-router-dom";
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button";
 
 type User = {
   _id: string;
@@ -257,9 +259,15 @@ export default function Message() {
   return (
     <div className="flex h-screen bg-gray-100 text-black mx-auto">
       {/* Sidebar */}
-      <div className="w-80 h-screen bg-white border-r flex flex-col">
+      <div className="w-80 h-screen bg-black text-white! border-r flex flex-col">
         <div className="p-4 border-b">
-          <h2 className="text-xl font-bold">Messages</h2>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold">Messages</h2>
+            <div className="flex justify-between  items-center gap-2">
+              <Input placeholder="Search User"/>
+              <Button className="bg-black" variant="outline">Search</Button>
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -267,7 +275,7 @@ export default function Message() {
             <div
               key={chat.conversationId}
               onClick={() => handleSelectChat(chat)}
-              className="flex items-center gap-3 p-4 hover:bg-gray-100 cursor-pointer"
+              className="flex items-center gap-3 p-4 hover:bg-gray-800 cursor-pointer"
             >
               <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold overflow-hidden">
                 {chat?.avatar ? (
@@ -280,7 +288,7 @@ export default function Message() {
               </div>
 
               <div className="flex-1 overflow-hidden">
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold ">
                   {chat.displayName || chat.username}
                 </p>
                 <p className="text-sm text-gray-500 truncate">
@@ -296,7 +304,7 @@ export default function Message() {
       {activeChat ? (
         <div className="flex-1 flex flex-col">
           {/* Header */}
-          <div className="bg-white border-b p-4 flex items-center gap-3">
+          <div className="bg-gray-700 border-b p-4 flex items-center gap-3">
             <div className="rounded-full bg-gray-300 overflow-hidden">
               {receiver?.avatar ? (
                 <img className="rounded-full w-12 h-12 object-cover" src={receiver.avatar} alt="Avatar" />
@@ -318,7 +326,7 @@ export default function Message() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-500 scrollbar-none">
             {messages.map((msg, index) => {
               // FIXED: Compare sender with user._id to determine if message is mine
               const isMine = msg.sender === user?._id;
@@ -354,7 +362,7 @@ export default function Message() {
           </div>
 
           {/* Input */}
-          <div className="bg-white border-t p-4">
+          <div className="bg-gray-400 border-t p-4">
             <div className="flex gap-3">
               <input
                 type="text"
