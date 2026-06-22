@@ -9,7 +9,7 @@ type Post = {
     likesCount: number;
     likes: string[];
     commentCount: number;
-    text: String;
+    text: string;
     savedBy: string[];
 };
 

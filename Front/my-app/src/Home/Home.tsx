@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import SmartVideo from "./SmartVideo";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { socket } from "../Socket/Socket";
+
 
 
 type User = {
@@ -28,7 +30,10 @@ type Post = {
     };
     mediaUrl: string;
     type: "image" | "video";
+
+    likes: string[];      // ← ADD THIS
     likesCount: number;
+
     comments: string;
     savedBy: string[];
     createdAt: string;
@@ -151,6 +156,93 @@ const Home = () => {
         fetchFeed();
     }, []);
 
+    // Like
+
+    useEffect(() => {
+        socket.on("postUpdated", (updatedPost) => {
+            setPosts(prev =>
+                prev.map(post =>
+                    post._id === updatedPost._id
+                        ? {
+                            ...post,
+                            likes: updatedPost.likes,
+                            likesCount: updatedPost.likesCount,
+                            savedBy: updatedPost.savedBy,
+                        }
+                        : post
+                )
+            );
+        });
+
+        return () => {
+            socket.off("postUpdated");
+        };
+    }, []);
+
+
+    const handleLike = (postId: string) => {
+        try {
+            if (!user?._id) {
+                console.warn("User not logged in");
+                return;
+            }
+
+            if (!postId) {
+                console.warn("Invalid postId");
+                return;
+            }
+
+            if (!socket || !socket.connected) {
+                console.error("Socket not connected");
+                return;
+            }
+            toggleLikeUI(postId); // 👈 instant UI update
+
+
+            socket.emit(
+                "toggleLike",
+                {
+                    postId,
+                    userId: user._id,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (response: any) => {
+                    // This is ACK from server (if implemented)
+                    if (response?.error) {
+                        console.error("Like action failed:", response.error);
+                        return;
+                    }
+
+                    console.log("Like updated successfully:", response);
+                }
+            );
+        } catch (error) {
+            console.error("Unexpected error in handleLike:", error);
+        }
+    };
+
+
+    const toggleLikeUI = (postId: string) => {
+        setPosts(prev =>
+            prev.map(p => {
+                if (p._id !== postId) return p;
+
+                const liked = p.likes.includes(user!._id);
+
+                return {
+                    ...p,
+                    likes: liked
+                        ? p.likes.filter(id => id !== user!._id)
+                        : [...p.likes, user!._id],
+
+                    likesCount: liked
+                        ? p.likesCount - 1
+                        : p.likesCount + 1,
+                };
+            })
+        );
+    };
+
     if (loading) {
         return (
             <div className="h-screen flex items-center justify-center text-white bg-black">
@@ -175,6 +267,24 @@ const Home = () => {
         if (hours < 24) return `${hours}h`;
         if (days < 365) return `${days}d`;
         return `${years}y`;
+    };
+
+    const formatCount = (num: number) => {
+        if (!num) return "0";
+
+        if (num >= 1_000_000_000) {
+            return (num / 1_000_000_000).toFixed(1).replace(".0", "") + "B";
+        }
+
+        if (num >= 1_000_000) {
+            return (num / 1_000_000).toFixed(1).replace(".0", "") + "M";
+        }
+
+        if (num >= 1_000) {
+            return (num / 1_000).toFixed(1).replace(".0", "") + "K";
+        }
+
+        return num.toString();
     };
 
 
@@ -245,59 +355,79 @@ const Home = () => {
 
 
             {/* Posts */}
-            {posts.map((post: Post) => (
-                <div key={post._id} className="mt-4">
+            {posts.map((post: Post) => {
+                    const isLiked = post.likes?.includes(user?._id || "");
+                return (
+                    <div key={post._id} className="mt-4">
 
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <img className="w-10 h-10 rounded-full object-cover" src={post.userId?.avatar} alt="" />
-                            <div>
-                                <div className="flex items-center gap-1 text-sm">
-                                    <h2>{post.userId?.username}</h2>
-                                    <p>{timeAgo(post.createdAt)}</p>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <img className="w-10 h-10 rounded-full object-cover" src={post.userId?.avatar} alt="" />
+                                <div>
+                                    <div className="flex items-center gap-1 text-sm">
+                                        <h2>{post.userId?.username}</h2>
+                                        <p>{timeAgo(post.createdAt)}</p>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        <p>Suggestion text</p>
+                                    </div>
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    <p>Suggestion text</p>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                                <p className=' text-blue-500 '>Follow</p>
+                                <MoreHorizontal />
+                            </div>
+                        </div>
+
+                        <div className="w-90 h-100 bg-amber-50">
+                            {post.type === "video" ? (
+                                <SmartVideo src={post.mediaUrl} />
+                            ) : (
+                                <img
+                                    className="w-full h-full object-cover"
+                                    src={post.mediaUrl}
+                                    alt="post"
+                                />
+                            )}
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mt-2">
+                                <div className="flex items-center gap-6">
+
+
+                                    <button className="cursor-pointer" onClick={() => handleLike(post._id)}>
+
+                                        <ActionItem
+                                            icon={
+                                                <Heart
+                                                    className={
+                                                        isLiked
+                                                            ? "text-red-500 fill-red-500"
+                                                            : "text-white"
+                                                    }
+                                                />
+                                            }
+                                            text={formatCount(post.likesCount)}
+                                        />
+                                    </button>
+
+                                    <ActionItem icon={<MessageCircle />} text={post.comments} />
+                                    <ActionItem icon={<Repeat />} text={post.shares} />
+                                    <ActionItem icon={<SendHorizonal />} text="" />
+                                </div>
+                                <div>
+                                    <Bookmark />
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 text-sm font-medium cursor-pointer">
-                            <p className=' text-blue-500 '>Follow</p>
-                            <MoreHorizontal />
-                        </div>
-                    </div>
-
-                    <div className="w-90 h-100 bg-amber-50">
-                        {post.type === "video" ? (
-                            <SmartVideo src={post.mediaUrl} />
-                        ) : (
-                            <img
-                                className="w-full h-full object-cover"
-                                src={post.mediaUrl}
-                                alt="post"
-                            />
-                        )}
-                    </div>
-
-                    <div>
-                        <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center gap-6">
-                                <ActionItem icon={<Heart />} text={post.likesCount} />
-                                <ActionItem icon={<MessageCircle />} text={post.comments} />
-                                <ActionItem icon={<Repeat />} text={post.shares} />
-                                <ActionItem icon={<SendHorizonal />} text="" />
-                            </div>
-                            <div>
-                                <Bookmark />
+                            <div className="mt-1 text-sm">
+                                <p>Caption needed!</p>
                             </div>
                         </div>
-                        <div className="mt-1 text-sm">
-                            <p>Caption needed!</p>
-                        </div>
                     </div>
-                </div>
-            ))}
+                )
+            })}
 
 
         </div>
