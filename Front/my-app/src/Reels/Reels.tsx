@@ -352,7 +352,7 @@ export default function Reels() {
                                         <button className="cursor-pointer" onClick={() => handleComment(post._id)}>
                                             <MessageCircle
                                                 size={30}
-                                                className="text-white"
+                                                className="text-white" 
 
                                             />
                                         </button>
