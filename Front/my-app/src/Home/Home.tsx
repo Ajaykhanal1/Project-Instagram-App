@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/purity */
-import { X, Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat, SendHorizonal } from 'lucide-react';
+import { X, Bookmark, Heart, MessageCircle, MoreHorizontal, SendHorizonal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import SmartVideo from "./SmartVideo";
 import { useNavigate } from "react-router-dom";
@@ -173,7 +173,7 @@ const Home = () => {
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<any>(null);
     const navigate = useNavigate();
     const [connections, setConnections] = useState<Connections>({
         followers: [],
@@ -305,9 +305,21 @@ const Home = () => {
                 )
             );
         });
+        const handleBookmarkUpdate = ({ postId, savedBy }: any) => {
+            setPosts(prev =>
+                prev.map(post =>
+                    post._id === postId
+                        ? { ...post, savedBy }
+                        : post
+                )
+            );
+        };
+
+        socket.on("bookmarkUpdated", handleBookmarkUpdate);
 
         return () => {
             socket.off("postUpdated");
+            socket.off("bookmarkUpdated");
         };
     }, []);
 
@@ -526,6 +538,7 @@ const Home = () => {
             {/* Posts */}
             {posts.map((post: Post) => {
                 const isLiked = post.likes?.includes(user?._id || "");
+                const isSaved = !!post.savedBy?.includes(user?._id);
                 return (
                     <div key={post._id} className="mt-4">
 
@@ -588,11 +601,23 @@ const Home = () => {
                                     </button>
 
 
-                                    <ActionItem icon={<Repeat />} text={post.shares} />
+                                    
+
+                                    
                                     <ActionItem icon={<SendHorizonal />} text="" />
                                 </div>
                                 <div>
-                                    <Bookmark />
+                                    <Bookmark
+                                            fill={isSaved ? "currentColor" : "none"}
+                                            className={isSaved ? "text-yellow-500" : ""}
+
+                                            onClick={() =>
+                                                socket.emit("toggleBookmark", {
+                                                    postId: post._id,
+                                                    userId: user._id,
+                                                })
+                                            }
+                                        />
                                 </div>
                             </div>
                             <div className="mt-1 text-sm">
