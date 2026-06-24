@@ -37,6 +37,7 @@ type Post = {
     likesCount: number;
 
     comments: string;
+    commentCount: number;
     savedBy: string[];
     createdAt: string;
     shares: string;
@@ -300,6 +301,10 @@ const Home = () => {
                             likes: updatedPost.likes,
                             likesCount: updatedPost.likesCount,
                             savedBy: updatedPost.savedBy,
+                            // Only update commentCount if server actually sent it
+                            ...(updatedPost.commentCount !== undefined && {
+                                commentCount: updatedPost.commentCount
+                            }),
                         }
                         : post
                 )
@@ -669,7 +674,7 @@ const Home = () => {
 
 
                                     <button className='cursor-pointer' onClick={() => handleComment(post._id)} >
-                                        <ActionItem icon={<MessageCircle />} text={post.comments} />
+                                        <ActionItem icon={<MessageCircle />} text={formatCount(post.commentCount)} />
                                     </button>
 
 

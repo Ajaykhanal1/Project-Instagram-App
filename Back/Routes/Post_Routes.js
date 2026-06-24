@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Post = require("../models/Post");
+const Comment  = require("../models/Comments");
 const { upload } = require("../middleware/upload");
 const { verifyToken } = require("../middleware/Authentication");
 
@@ -51,7 +52,20 @@ router.get("/feed", async (req, res) => {
     const posts = await Post.find()
       .sort({ createdAt: -1 })
       .populate("userId", "username displayName avatar");
-    const shuffled = posts.sort(() => Math.random() - 0.5);
+
+    const postsWithCounts = await Promise.all(
+      posts.map(async (post) => {
+        const commentCount = await Comment.countDocuments({
+          postId: post._id,
+        });
+
+        return {
+          ...post.toObject(),
+          commentCount,
+        };
+      })
+    );
+    const shuffled = postsWithCounts.sort(() => Math.random() - 0.5);
 
     res.json(shuffled);
   } catch (err) {
