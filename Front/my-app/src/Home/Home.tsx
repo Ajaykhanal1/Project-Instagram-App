@@ -32,7 +32,7 @@ type Post = {
     };
     mediaUrl: string;
     type: "image" | "video";
-
+    title: string;
     likes: string[];      // ← ADD THIS
     likesCount: number;
 
@@ -698,7 +698,8 @@ const Home = () => {
                                 </div>
                             </div>
                             <div className="mt-1 text-sm">
-                                <p>Caption needed!</p>
+                                <span className="font-semibold">{post.userId.username} </span>
+                                <span className="text-gray-300">{post.title}</span>
                             </div>
                         </div>
                     </div>

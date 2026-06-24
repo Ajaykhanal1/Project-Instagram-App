@@ -9,6 +9,10 @@ const postSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  title: {
+    type: String,
+    default: "",
+  },
   type: {
     type: String,
     enum: ["image", "video"],

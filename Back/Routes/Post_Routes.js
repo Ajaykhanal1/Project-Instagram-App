@@ -10,7 +10,7 @@ const { verifyToken } = require("../middleware/Authentication");
 ========================= */
 router.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, title  } = req.body;
     const file = req.file;
 
     if (!userId) {
@@ -21,6 +21,7 @@ router.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
       userId,
       mediaUrl: `http://localhost:5000/uploads/${file.filename}`,
       type: file.mimetype.startsWith("video") ? "video" : "image",
+      title,
     });
 
     res.status(201).json(newPost);

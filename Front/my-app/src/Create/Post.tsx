@@ -23,6 +23,7 @@ const Post = ({ onClose }: Props) => {
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const [postTitle, setPostTitle] = useState("");
 
   /* ================= TOKEN ================= */
   useEffect(() => {
@@ -55,13 +56,12 @@ const Post = ({ onClose }: Props) => {
     formData.append("file", media.file);
     formData.append("userId", userId);
     formData.append("type", media.type);
+    formData.append("title", postTitle);   // ← add this
 
     try {
       const res = await fetch("http://localhost:5000/api/posts/upload", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
@@ -69,6 +69,7 @@ const Post = ({ onClose }: Props) => {
       console.log("Uploaded:", data);
 
       setMedia(null);
+      setPostTitle("");   // ← reset
       onClose();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -139,6 +140,12 @@ const Post = ({ onClose }: Props) => {
                 />
               )}
             </div>
+            <input
+              value={postTitle}
+              onChange={(e) => setPostTitle(e.target.value)}
+              placeholder="Write a caption..."
+              className="mt-3 bg-gray-900 text-white rounded-xl px-4 py-2 outline-none w-full resize-none"
+            />
 
             {/* ACTIONS */}
             <div className="flex justify-between items-center mt-4">
