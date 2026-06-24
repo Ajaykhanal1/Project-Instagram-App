@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/purity */
-import { X, Bookmark, Heart, MessageCircle, MoreHorizontal, SendHorizonal } from 'lucide-react';
+import { X, Bookmark, Heart, MessageCircle, SendHorizonal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import SmartVideo from "./SmartVideo";
 import { useNavigate } from "react-router-dom";
@@ -424,6 +424,52 @@ const Home = () => {
     // End Comment Section
 
 
+useEffect(() => {
+  const handleFollowUpdate = (data: {
+    targetUserId: string;
+    followerId: string;
+    isFollowing: boolean;
+  }) => {
+
+    // only update if current logged in user is the one who followed/unfollowed
+    if (data.followerId !== user?._id) return;
+
+    setUser((prev: any) => {
+      if (!prev) return prev;
+
+      const following = [...(prev.following || [])];
+
+      if (data.isFollowing) {
+        if (!following.includes(data.targetUserId)) {
+          following.push(data.targetUserId);
+        }
+      } else {
+        const updated = following.filter(
+          (id: string) => id !== data.targetUserId
+        );
+
+        return {
+          ...prev,
+          following: updated,
+        };
+      }
+
+      return {
+        ...prev,
+        following,
+      };
+    });
+  };
+
+  socket.on("followUpdated", handleFollowUpdate);
+
+  return () => {
+    socket.off("followUpdated", handleFollowUpdate);
+  };
+}, [user?._id]);
+
+
+
     if (loading) {
         return (
             <div className="h-screen flex items-center justify-center text-white bg-black">
@@ -539,6 +585,8 @@ const Home = () => {
             {posts.map((post: Post) => {
                 const isLiked = post.likes?.includes(user?._id || "");
                 const isSaved = !!post.savedBy?.includes(user?._id);
+                const isFollowing = user?.following?.includes(post.userId._id);
+                const isOwnPost = user?._id === post.userId._id;
                 return (
                     <div key={post._id} className="mt-4">
 
@@ -557,8 +605,32 @@ const Home = () => {
                             </div>
 
                             <div className="flex items-center gap-3 text-sm font-medium cursor-pointer">
-                                <p className=' text-blue-500 '>Follow</p>
-                                <MoreHorizontal />
+                                <button
+                                    onClick={() => {
+                                        if (isFollowing) {
+                                            socket.emit("unfollowUser", {
+                                                currentUserId: user._id,
+                                                targetUserId: post.userId._id
+                                            });
+                                        } else {
+                                            socket.emit("followUser", {
+                                                currentUserId: user._id,
+                                                targetUserId: post.userId._id
+                                            });
+                                        }
+                                    }}
+                                    className={`cursor-pointer flex-1 py-2 rounded-lg ${isFollowing
+                                        ? "text-blue-500"
+                                        : "text-blue-500"
+                                        }`}
+                                >
+                                    {!isOwnPost && (
+                                        <p>
+                                            {isFollowing ? "Following" : "Follow"}
+                                        </p>
+                                    )}
+                                </button>
+                                
                             </div>
                         </div>
 
@@ -601,23 +673,23 @@ const Home = () => {
                                     </button>
 
 
-                                    
 
-                                    
+
+
                                     <ActionItem icon={<SendHorizonal />} text="" />
                                 </div>
                                 <div>
                                     <Bookmark
-                                            fill={isSaved ? "currentColor" : "none"}
-                                            className={isSaved ? "text-yellow-500" : ""}
+                                        fill={isSaved ? "currentColor" : "none"}
+                                        className={isSaved ? "text-yellow-500" : ""}
 
-                                            onClick={() =>
-                                                socket.emit("toggleBookmark", {
-                                                    postId: post._id,
-                                                    userId: user._id,
-                                                })
-                                            }
-                                        />
+                                        onClick={() =>
+                                            socket.emit("toggleBookmark", {
+                                                postId: post._id,
+                                                userId: user._id,
+                                            })
+                                        }
+                                    />
                                 </div>
                             </div>
                             <div className="mt-1 text-sm">
