@@ -424,49 +424,49 @@ const Home = () => {
     // End Comment Section
 
 
-useEffect(() => {
-  const handleFollowUpdate = (data: {
-    targetUserId: string;
-    followerId: string;
-    isFollowing: boolean;
-  }) => {
+    useEffect(() => {
+        const handleFollowUpdate = (data: {
+            targetUserId: string;
+            followerId: string;
+            isFollowing: boolean;
+        }) => {
 
-    // only update if current logged in user is the one who followed/unfollowed
-    if (data.followerId !== user?._id) return;
+            // only update if current logged in user is the one who followed/unfollowed
+            if (data.followerId !== user?._id) return;
 
-    setUser((prev: any) => {
-      if (!prev) return prev;
+            setUser((prev: any) => {
+                if (!prev) return prev;
 
-      const following = [...(prev.following || [])];
+                const following = [...(prev.following || [])];
 
-      if (data.isFollowing) {
-        if (!following.includes(data.targetUserId)) {
-          following.push(data.targetUserId);
-        }
-      } else {
-        const updated = following.filter(
-          (id: string) => id !== data.targetUserId
-        );
+                if (data.isFollowing) {
+                    if (!following.includes(data.targetUserId)) {
+                        following.push(data.targetUserId);
+                    }
+                } else {
+                    const updated = following.filter(
+                        (id: string) => id !== data.targetUserId
+                    );
 
-        return {
-          ...prev,
-          following: updated,
+                    return {
+                        ...prev,
+                        following: updated,
+                    };
+                }
+
+                return {
+                    ...prev,
+                    following,
+                };
+            });
         };
-      }
 
-      return {
-        ...prev,
-        following,
-      };
-    });
-  };
+        socket.on("followUpdated", handleFollowUpdate);
 
-  socket.on("followUpdated", handleFollowUpdate);
-
-  return () => {
-    socket.off("followUpdated", handleFollowUpdate);
-  };
-}, [user?._id]);
+        return () => {
+            socket.off("followUpdated", handleFollowUpdate);
+        };
+    }, [user?._id]);
 
 
 
@@ -630,7 +630,7 @@ useEffect(() => {
                                         </p>
                                     )}
                                 </button>
-                                
+
                             </div>
                         </div>
 
