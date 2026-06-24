@@ -354,7 +354,6 @@ const Home = () => {
                     postId,
                     userId: user._id,
                 },
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (response: any) => {
                     // This is ACK from server (if implemented)
                     if (response?.error) {
@@ -548,7 +547,7 @@ const Home = () => {
                         <div
                             key={user._id}
                             onClick={() => navigate(`/searchProfile/${user._id}`)}
-                            className="flex flex-col items-center gap-1 shrink-0">
+                            className="flex flex-col items-center gap-1 shrink-0 cursor-pointer">
                             {/* Story Ring */}
                             <div className="relative">
                                 <div className="w-20 h-20 rounded-full bg-linear-to-tr from-yellow-400 to-red-500 p-0.5">
