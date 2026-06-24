@@ -11,6 +11,12 @@ type Post = {
     commentCount: number;
     text: string;
     savedBy: string[];
+    title: string;
+    userId: {
+        _id: string;
+        username: string;
+        avatar: string;
+    };
 };
 
 type Comment = {
@@ -320,7 +326,11 @@ export default function Reels() {
                                 className="h-screen snap-start flex items-center justify-center relative"
                             >
                                 <div>
-                                    <ReelItem url={post.mediaUrl} />
+                                    <ReelItem 
+                                        url={post.mediaUrl}
+                                        username={post.userId?.username}
+                                        title={post.title}
+                                    />
                                 </div>
 
 
@@ -352,7 +362,7 @@ export default function Reels() {
                                         <button className="cursor-pointer" onClick={() => handleComment(post._id)}>
                                             <MessageCircle
                                                 size={30}
-                                                className="text-white" 
+                                                className="text-white"
 
                                             />
                                         </button>

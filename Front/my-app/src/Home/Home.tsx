@@ -593,7 +593,7 @@ const Home = () => {
                 const isFollowing = user?.following?.includes(post.userId._id);
                 const isOwnPost = user?._id === post.userId._id;
                 return (
-                    <div key={post._id} className="mt-4">
+                    <div key={post._id} className="mt-4 border-b pb-1">
 
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -699,7 +699,9 @@ const Home = () => {
                             </div>
                             <div className="mt-1 text-sm">
                                 <span className="font-semibold">{post.userId.username} </span>
-                                <span className="text-gray-300">{post.title}</span>
+                                <span className="text-gray-300">
+                                    {post.title?.length > 30 ? post.title.slice(0, 30) + "..." : post.title}
+                                </span>
                             </div>
                         </div>
                     </div>

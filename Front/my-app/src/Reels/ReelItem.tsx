@@ -1,7 +1,11 @@
 import { useRef, useEffect, useState } from "react";
 import { Volume2, VolumeX, Play } from "lucide-react";
 
-export default function ReelItem({ url }: { url: string }) {
+export default function ReelItem({ url, username, title }: {
+  url: string;
+  username: string;
+  title: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -10,40 +14,40 @@ export default function ReelItem({ url }: { url: string }) {
 
   // 🔥 AUTO PLAY ON LOAD + SCROLL (INSTAGRAM STYLE)
   useEffect(() => {
-  const video = videoRef.current;
-  if (!video) return;
+    const video = videoRef.current;
+    if (!video) return;
 
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      const video = videoRef.current;
-      if (!video) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const video = videoRef.current;
+        if (!video) return;
 
-      if (entry.isIntersecting) {
-        // 🔥 START MUTED
-        video.muted = true;
-        setMuted(true);
+        if (entry.isIntersecting) {
+          // 🔥 START MUTED
+          video.muted = true;
+          setMuted(true);
 
-        video.play().then(() => {
+          video.play().then(() => {
 
-          // 🔥 AFTER 1 SECOND → UNMUTE
-          setTimeout(() => {
-            video.muted = false;
-            setMuted(false);
-          }, 100);
-        }).catch(() => {});
-      } else {
-        video.pause();
-      }
-    },
-    { threshold: 0.75 }
-  );
+            // 🔥 AFTER 1 SECOND → UNMUTE
+            setTimeout(() => {
+              video.muted = false;
+              setMuted(false);
+            }, 100);
+          }).catch(() => { });
+        } else {
+          video.pause();
+        }
+      },
+      { threshold: 0.75 }
+    );
 
-  if (containerRef.current) {
-    observer.observe(containerRef.current);
-  }
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
 
-  return () => observer.disconnect();
-}, []);
+    return () => observer.disconnect();
+  }, []);
 
 
   // 👆 TAP → PLAY / PAUSE
@@ -63,31 +67,31 @@ export default function ReelItem({ url }: { url: string }) {
   };
 
   // 🔊 MUTE / UNMUTE
-const toggleMute = (e: React.MouseEvent) => {
-  e.stopPropagation();
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
 
-  const video = videoRef.current;
-  if (!video) return;
+    const video = videoRef.current;
+    if (!video) return;
 
-  const newMuted = !muted;
+    const newMuted = !muted;
 
-  setMuted(newMuted);
-  video.muted = newMuted;
+    setMuted(newMuted);
+    video.muted = newMuted;
 
-  if (!newMuted) {
-    // 🔥 FORCE AUDIO RE-ATTACH (IMPORTANT FIX)
-    const currentTime = video.currentTime;
+    if (!newMuted) {
+      // 🔥 FORCE AUDIO RE-ATTACH (IMPORTANT FIX)
+      const currentTime = video.currentTime;
 
-    video.pause();
-    video.currentTime = currentTime;
+      video.pause();
+      video.currentTime = currentTime;
 
-    video.play().catch(() => {
-      setTimeout(() => {
-        video.play().catch(() => {});
-      }, 50);
-    });
-  }
-};
+      video.play().catch(() => {
+        setTimeout(() => {
+          video.play().catch(() => { });
+        }, 50);
+      });
+    }
+  };
 
   return (
     <div
@@ -130,9 +134,9 @@ const toggleMute = (e: React.MouseEvent) => {
       </div>
 
       {/* 📝 BOTTOM TEXT */}
-      <div className="absolute bottom-5 left-3 text-white">
-        <p className="font-semibold">@user</p>
-        <p className="text-sm opacity-80">This is a reel caption</p>
+      <div className="absolute bottom-6 left-4 right-16 text-white">
+        <p className="font-semibold text-sm">@{username}</p>
+        <p className="text-sm text-gray-300 mt-1">{title}</p>
       </div>
     </div>
   );

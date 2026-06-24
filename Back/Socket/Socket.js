@@ -38,16 +38,16 @@ const setupSocket = (io) => {
   io.on("connection", (socket) => {
     socket.on("getPosts", async () => {
       try {
-        const posts = await Post.find();
+        const posts = await Post.find().populate("userId", "username avatar displayName");
 
         const postsWithCommentCount = await Promise.all(
           posts.map(async (post) => {
             const commentCount = await Comment.countDocuments({
               postId: post._id,
-            });
+            });  // ← check terminal
 
             return {
-              ...post._doc,
+              ...post.toObject(),
               commentCount,
             };
           }),
